@@ -28,7 +28,7 @@ export function WaLayout() {
   const [accountRailExpanded, setAccountRailExpanded] = useState(false);
   const accountsQuery = useInfiniteQuery({ queryKey: waKeys.accounts(), queryFn: ({ pageParam }) => getWaAccounts(pageParam), initialPageParam: '', getNextPageParam: (lastPage) => lastPage.next_cursor || undefined, refetchInterval: 10000 });
   const connections = useWaLongConnectionIndex();
-  const accounts = useMemo(() => accountsQuery.data?.pages.flatMap((page) => page.accounts) || emptyAccounts, [accountsQuery.data]);
+  const accounts = useMemo(() => accountsQuery.data?.pages.flatMap((page) => page.accounts || emptyAccounts) || emptyAccounts, [accountsQuery.data]);
   const selectedID = useSelectedAccountID(accounts);
   const deletion = useMutation({ mutationFn: deleteWaAccount, onSuccess: async () => { toast.showOK('账号已删除'); await refreshAccounts(); navigate('/', { replace: true }); }, onError: toast.showError });
   async function refreshAccounts() {
