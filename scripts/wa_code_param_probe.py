@@ -342,8 +342,7 @@ def gpia_key_source(material: ProbeMaterial) -> str:
 
 def render_json_value(value: Any, escape_slash: bool) -> str:
     if isinstance(value, str):
-        encoded = json.dumps(value, separators=(",", ":"))
-        return encoded.replace("/", r"\/") if escape_slash else encoded
+        return android_json_quote(value, escape_slash)
     if isinstance(value, bool):
         return "true" if value else "false"
     if value is None:
@@ -353,10 +352,34 @@ def render_json_value(value: Any, escape_slash: bool) -> str:
     raise TypeError(f"unsupported JSON value type: {type(value)!r}")
 
 
+def android_json_quote(value: str, escape_slash: bool = True) -> str:
+    out = ['"']
+    for char in value:
+        code = ord(char)
+        if char in {'"', "\\"} or (escape_slash and char == "/"):
+            out.append("\\" + char)
+        elif char == "\t":
+            out.append(r"\t")
+        elif char == "\b":
+            out.append(r"\b")
+        elif char == "\n":
+            out.append(r"\n")
+        elif char == "\r":
+            out.append(r"\r")
+        elif char == "\f":
+            out.append(r"\f")
+        elif code <= 0x1F:
+            out.append(f"\\u{code:04x}")
+        else:
+            out.append(char)
+    out.append('"')
+    return "".join(out)
+
+
 def render_ordered_json(fields: list[tuple[str, Any]], escape_slash: bool) -> str:
     parts = []
     for key, value in fields:
-        parts.append(json.dumps(key, separators=(",", ":")) + ":" + render_json_value(value, escape_slash))
+        parts.append(android_json_quote(key) + ":" + render_json_value(value, escape_slash))
     return "{" + ",".join(parts) + "}"
 
 

@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -145,11 +144,7 @@ func renderNativeGPIAJSONObject(fields []nativeGPIAJSONField) ([]byte, error) {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		key, err := json.Marshal(field.Key)
-		if err != nil {
-			return nil, err
-		}
-		b.Write(key)
+		b.Write(renderNativeGPIAJSONString(field.Key))
 		b.WriteByte(':')
 		value, err := renderNativeGPIAJSONValue(field.Value)
 		if err != nil {
@@ -164,7 +159,7 @@ func renderNativeGPIAJSONObject(fields []nativeGPIAJSONField) ([]byte, error) {
 func renderNativeGPIAJSONValue(value any) ([]byte, error) {
 	switch v := value.(type) {
 	case string:
-		return renderNativeGPIAJSONString(v)
+		return renderNativeGPIAJSONString(v), nil
 	case int:
 		return []byte(strconv.Itoa(v)), nil
 	case int64:
@@ -178,10 +173,33 @@ func renderNativeGPIAJSONValue(value any) ([]byte, error) {
 	}
 }
 
-func renderNativeGPIAJSONString(value string) ([]byte, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
+func renderNativeGPIAJSONString(value string) []byte {
+	var b strings.Builder
+	b.Grow(len(value) + 2)
+	b.WriteByte('"')
+	for _, char := range value {
+		switch char {
+		case '"', '\\', '/':
+			b.WriteByte('\\')
+			b.WriteRune(char)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\f':
+			b.WriteString(`\f`)
+		default:
+			if char <= 0x1f {
+				_, _ = fmt.Fprintf(&b, `\u%04x`, char)
+				continue
+			}
+			b.WriteRune(char)
+		}
 	}
-	return []byte(strings.ReplaceAll(string(encoded), `/`, `\/`)), nil
+	b.WriteByte('"')
+	return []byte(b.String())
 }
