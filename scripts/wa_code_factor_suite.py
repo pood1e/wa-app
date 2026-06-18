@@ -456,7 +456,7 @@ def factor_arms() -> list[FactorArm]:
         "gpia-json-no-slash-escape",
         "wamsys-ghcr",
     )
-    wamsys_omits = ("gpia", "_ga", "_gi", "_gp", "_ge", "aid", "_gg")
+    wamsys_omits = ("gpia", "_ga", "_gi", "_gp", "_ge", "aid", "_gg", "_gs")
     co_locale_sets = ("lg=es", "lc=CO")
     co_operator_patch = ("operator-co-732101",)
     combo_arms = []

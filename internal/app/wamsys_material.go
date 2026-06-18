@@ -100,8 +100,8 @@ func nativeSyntheticAndroidID(state nativeState) string {
 
 func buildLocalWamsysGA(input wamsysMaterialInput) ([]byte, error) {
 	keySource := nativeGPIAKeySource(input.State)
-	bootID := nativeWamsysBootID(input)
-	bi, err := encryptNativeGPIAData(keySource, []byte(bootID))
+	bootIDMaterial := nativeWamsysBootIDMaterial(input)
+	bi, err := encryptNativeGPIAData(keySource, []byte(bootIDMaterial))
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func buildLocalWamsysGA(input wamsysMaterialInput) ([]byte, error) {
 		{Key: "ae", Value: pathAges.External},
 		{Key: "mu", Value: false},
 	}
-	logNativeWamsysGAPlaintextShape(input, keySource, bootID, fields)
+	logNativeWamsysGAPlaintextShape(input, keySource, bootIDMaterial, fields)
 	return renderNativeGPIAJSONObject(fields)
 }
 
@@ -195,8 +195,13 @@ func nativeWamsysNow(input wamsysMaterialInput) time.Time {
 	return now.UTC()
 }
 
-func nativeWamsysBootID(input wamsysMaterialInput) string {
-	return nativeStableWamsysBootID(input.State)
+func nativeWamsysBootIDMaterial(input wamsysMaterialInput) string {
+	sum := sha256.Sum256(nativeWamsysBootIDFileBytes(input.State))
+	return b64Std(sum[:])
+}
+
+func nativeWamsysBootIDFileBytes(state nativeState) []byte {
+	return []byte(nativeStableWamsysBootID(state) + "\n")
 }
 
 func nativeStableWamsysBootID(state nativeState) string {
@@ -289,6 +294,7 @@ var opaqueWamsysMapKeys = map[string]struct{}{
 	"_gp":  {},
 	"_ga":  {},
 	"aid":  {},
+	"_gs":  {},
 }
 
 func isOpaqueWamsysMapKey(key string) bool {

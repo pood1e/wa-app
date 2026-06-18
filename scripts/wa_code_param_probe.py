@@ -444,6 +444,11 @@ def current_boot_id(material: ProbeMaterial) -> str:
     return str(uuid.UUID(bytes=bytes(raw)))
 
 
+def current_boot_id_material(material: ProbeMaterial) -> str:
+    proc_file_bytes = (current_boot_id(material) + "\n").encode()
+    return b64std(hashlib.sha256(proc_file_bytes).digest())
+
+
 def current_wamsys_runtime_offset(material: ProbeMaterial, label: str, base: int, spread: int, now: int) -> int:
     if spread <= 0:
         return base
@@ -497,8 +502,8 @@ def current_wamsys_path_ages(material: ProbeMaterial, now: int | None = None) ->
 
 def build_current_ga(material: ProbeMaterial, config: ShapeConfig) -> str:
     key_source = gpia_key_source(material)
-    boot_id = current_boot_id(material)
-    bi = aes_cbc_pkcs7_encrypt(key_source, boot_id.encode())
+    boot_id_material = current_boot_id_material(material)
+    bi = aes_cbc_pkcs7_encrypt(key_source, boot_id_material.encode())
     source_age, data_age, external_age = current_wamsys_path_ages(material)
     fields = [("bi", bi), ("ap", source_age), ("ai", data_age), ("mp", False), ("ae", external_age), ("mu", False)]
     return render_ordered_json(fields, config.gpia_escape_slash)

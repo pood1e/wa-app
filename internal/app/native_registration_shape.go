@@ -113,7 +113,7 @@ func shouldLogRegistrationValueHash(key string) bool {
 		"roaming_type", "push_code", "new_acc_uuid", "old_phone_number", "device_ram", "db", "recaptcha",
 		"fid", "preloads_app_manager_id", "preloads_attribution", "tos_version", "entrypoint",
 		"cred_token", "feo2_query_status",
-		"ab_hash", "gpia", "_ge", "_gi", "_gg", "_gp", "_ga", "_hp", "aid":
+		"ab_hash", "gpia", "_ge", "_gi", "_gg", "_gp", "_ga", "_gs", "aid":
 		return true
 	default:
 		return false
@@ -190,7 +190,7 @@ func logNativeGPIAPlaintextShape(input wamsysMaterialInput, label string, keySou
 	)
 }
 
-func logNativeWamsysGAPlaintextShape(input wamsysMaterialInput, keySource string, bootID string, fields []nativeGPIAJSONField) {
+func logNativeWamsysGAPlaintextShape(input wamsysMaterialInput, keySource string, bootIDMaterial string, fields []nativeGPIAJSONField) {
 	plaintext, err := renderNativeGPIAJSONObject(fields)
 	if err != nil {
 		log.Printf(
@@ -202,13 +202,13 @@ func logNativeWamsysGAPlaintextShape(input wamsysMaterialInput, keySource string
 		return
 	}
 	log.Printf(
-		"wa_registration_wamsys_ga_plaintext_shape kind=%s phone_hash=%s key_source_len=%d key_source_hash=%s boot_id_len=%d boot_id_hash=%s json_len=%d json_hash=%s keys=%s fields=%s",
+		"wa_registration_wamsys_ga_plaintext_shape kind=%s phone_hash=%s key_source_len=%d key_source_hash=%s boot_id_material_len=%d boot_id_material_hash=%s json_len=%d json_hash=%s keys=%s fields=%s",
 		probeLogValue(registrationRequestKindName(input.Kind)),
 		wamsysInputPhoneHash(input),
 		len([]byte(keySource)),
 		stableID(keySource),
-		len([]byte(bootID)),
-		stableID(bootID),
+		len([]byte(bootIDMaterial)),
+		stableID(bootIDMaterial),
 		len(plaintext),
 		stableID(string(plaintext)),
 		probeLogValue(nativeGPIAFieldKeys(fields)),
