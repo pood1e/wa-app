@@ -725,6 +725,8 @@ func (g *actionGateway) registrationRequestRunner(ctx context.Context, payload m
 	}
 	if validRegistrationProxyLease(lease) {
 		route = leasedRoute
+	} else if isStaticCommonProxyRoute(route) {
+		return engine, directWAProxyRoute(), false, registrationProxyLease{}, nil
 	}
 	proxied, err := engine.WithProxyURL(route.ProxyURL)
 	if err != nil {
@@ -753,6 +755,9 @@ func (g *actionGateway) registrationSubmitRunner(ctx context.Context, payload ma
 	}
 	if !useProxy {
 		return engine, route, false, registrationProxyLease{}, nil
+	}
+	if isStaticCommonProxyRoute(route) {
+		return engine, directWAProxyRoute(), false, registrationProxyLease{}, nil
 	}
 	proxied, err := engine.WithProxyURL(route.ProxyURL)
 	if err != nil {

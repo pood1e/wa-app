@@ -114,8 +114,8 @@ func (s *Server) numberProbeProxy(ctx context.Context, payload map[string]any) (
 		return route, "", waProxySummary(route, false), func() {}, nil
 	}
 	gateway := &actionGateway{server: s}
-	if route.Source == waProxySourceSystemCommon && gateway.registrationProxyLeaseAccountID(payload, route) == "" {
-		direct := WAProxyRoute{ProxyMode: waProxyModeDirect, CountryCode: "LOCAL", Source: waProxySourceDirect, PolicyMode: waProxyModeDirect}
+	if isStaticCommonProxyRoute(route) && gateway.registrationProxyLeaseAccountID(payload, route) == "" {
+		direct := directWAProxyRoute()
 		return direct, "", waProxySummary(direct, false), func() {}, nil
 	}
 	lease, leasedRoute, err := gateway.acquireRegistrationProxyLease(ctx, payload, route, numberProbeProxyRouteTTL)
@@ -126,6 +126,9 @@ func (s *Server) numberProbeProxy(ctx context.Context, payload map[string]any) (
 	if validRegistrationProxyLease(lease) {
 		route = leasedRoute
 		release = func() { gateway.releaseRegistrationProxyLease(context.Background(), lease) }
+	} else if isStaticCommonProxyRoute(route) {
+		direct := directWAProxyRoute()
+		return direct, "", waProxySummary(direct, false), release, nil
 	}
 	return route, route.ProxyURL, waProxySummary(route, true), release, nil
 }
