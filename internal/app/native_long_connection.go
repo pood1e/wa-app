@@ -36,6 +36,7 @@ type longConnectionNativeEngine struct {
 type longConnectionActiveRead struct {
 	cancel    context.CancelFunc
 	done      chan struct{}
+	session   *chatdSession
 	preempted bool
 }
 
@@ -233,7 +234,7 @@ func (e *longConnectionNativeEngine) bufferPendingLocked(items []chatdReceivedIt
 }
 
 func (e *longConnectionNativeEngine) receiveBatchWithActiveReadLocked(ctx context.Context, session *chatdSession, input EngineMessageInput, now time.Time) ([]*waappv1.InboundMessage, []chatdEncPayload, []*waappv1.OtpMessage, chatdSessionUpdate, error, bool) {
-	read, readCtx := e.startActiveReadLocked(ctx)
+	read, readCtx := e.startActiveReadLocked(ctx, session)
 	e.mu.Unlock()
 	messages, payloads, otps, update, err := receiveChatdBatchWithContext(readCtx, session, input, now)
 	e.mu.Lock()
@@ -241,12 +242,12 @@ func (e *longConnectionNativeEngine) receiveBatchWithActiveReadLocked(ctx contex
 	return messages, payloads, otps, update, err, preempted
 }
 
-func (e *longConnectionNativeEngine) startActiveReadLocked(ctx context.Context) (*longConnectionActiveRead, context.Context) {
+func (e *longConnectionNativeEngine) startActiveReadLocked(ctx context.Context, session *chatdSession) (*longConnectionActiveRead, context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	readCtx, cancel := context.WithCancel(ctx)
-	read := &longConnectionActiveRead{cancel: cancel, done: make(chan struct{})}
+	read := &longConnectionActiveRead{cancel: cancel, done: make(chan struct{}), session: session}
 	e.activeRead = read
 	return read, readCtx
 }
@@ -260,9 +261,6 @@ func (e *longConnectionNativeEngine) finishActiveReadLocked(read *longConnection
 	if e.activeRead == read {
 		e.activeRead = nil
 	}
-	if preempted {
-		_ = e.closeLocked()
-	}
 	close(read.done)
 	e.broadcastLocked()
 	return preempted
@@ -273,7 +271,9 @@ func (e *longConnectionNativeEngine) preemptActiveReadLocked() {
 		return
 	}
 	e.activeRead.preempted = true
-	e.activeRead.cancel()
+	if e.activeRead.session != nil && e.activeRead.session.conn != nil {
+		_ = e.activeRead.session.conn.SetReadDeadline(time.Now())
+	}
 }
 
 func (e *longConnectionNativeEngine) waitForInteractiveIQLocked(ctx context.Context) error {
