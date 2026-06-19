@@ -320,7 +320,7 @@ func (g *actionGateway) acquireRegistrationProxyLease(ctx context.Context, paylo
 	if g.server.registrationProxyLeaseProvider == nil {
 		return g.optionalRegistrationProxyLeaseError(route, NewError(waappv1.WaErrorCode_WA_ERROR_CODE_ROUTE_UNAVAILABLE, "registration proxy lease provider is not configured", true), "", payload)
 	}
-	accountID := registrationProxyLeaseAccountID(payload, route)
+	accountID := g.registrationProxyLeaseAccountID(payload, route)
 	if accountID == "" {
 		return g.optionalRegistrationProxyLeaseError(route, NewError(waappv1.WaErrorCode_WA_ERROR_CODE_ROUTE_UNAVAILABLE, "registration proxy lease account is not configured", true), "", payload)
 	}
@@ -337,10 +337,22 @@ func (g *actionGateway) acquireRegistrationProxyLease(ctx context.Context, paylo
 	return lease, registrationProxyLeaseRoute(lease, route), nil
 }
 
-func registrationProxyLeaseAccountID(payload map[string]any, route WAProxyRoute) string {
+func (g *actionGateway) registrationProxyLeaseAccountID(payload map[string]any, route WAProxyRoute) string {
+	configured := ""
+	if g != nil && g.server != nil {
+		configured = g.server.registrationProxyLeaseAccountID
+	}
+	if route.Source == waProxySourceSystemCommon {
+		return firstNonEmpty(
+			textField(payload, "proxy_lease_account_id"),
+			textField(objectField(payload, "proxy"), "proxy_lease_account_id"),
+			configured,
+		)
+	}
 	return firstNonEmpty(
 		textField(payload, "proxy_lease_account_id"),
 		textField(objectField(payload, "proxy"), "proxy_lease_account_id"),
+		configured,
 		registrationProxyLeaseAccountIDFromProxyURL(route.ProxyURL),
 	)
 }
