@@ -142,6 +142,25 @@ func (m *LongConnectionManager) Runner(loginState *waappv1.LoginState) ProtocolE
 	return entry.runner
 }
 
+func (m *LongConnectionManager) ActiveRunner(loginState *waappv1.LoginState) ProtocolEngine {
+	if m == nil || loginState == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry := m.entries[longConnectionKey(loginState)]
+	if entry == nil || entry.cancel == nil || entry.runner == nil || entry.snapshot == nil {
+		return nil
+	}
+	switch entry.snapshot.GetStatus() {
+	case waappv1.LongConnectionStatus_LONG_CONNECTION_STATUS_CONNECTED,
+		waappv1.LongConnectionStatus_LONG_CONNECTION_STATUS_HEARTBEAT_WAITING:
+		return entry.runner
+	default:
+		return nil
+	}
+}
+
 func (m *LongConnectionManager) MessageSessionID(loginState *waappv1.LoginState) string {
 	if m == nil || loginState == nil {
 		return ""

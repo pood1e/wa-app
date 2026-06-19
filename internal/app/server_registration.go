@@ -181,7 +181,10 @@ func (s *Server) checkLoginState(ctx context.Context, req *waappv1.CheckLoginSta
 	if err != nil {
 		return &waappv1.CheckLoginStateResponse{Error: ToProtoError(err)}, nil
 	}
-	result := runner.CheckLoginState(ctx, EngineLoginCheckInput{WAAccountID: loginState.GetWaAccountId(), ClientProfileID: loginState.GetClientProfileId(), RegisteredIdentityID: loginState.GetRegisteredIdentityId(), AppVersion: s.loginStateAppVersion(ctx, loginState), RemoteTimeout: durationFromProto(req.GetRemoteTimeout())})
+	result := EngineLoginCheckResult{Status: waappv1.LoginStateCheckStatus_LOGIN_STATE_CHECK_STATUS_ACTIVE}
+	if s.longConnections == nil || s.longConnections.ActiveRunner(loginState) == nil {
+		result = runner.CheckLoginState(ctx, EngineLoginCheckInput{WAAccountID: loginState.GetWaAccountId(), ClientProfileID: loginState.GetClientProfileId(), RegisteredIdentityID: loginState.GetRegisteredIdentityId(), AppVersion: s.loginStateAppVersion(ctx, loginState), RemoteTimeout: durationFromProto(req.GetRemoteTimeout())})
+	}
 	now := s.clock.Now()
 	check := &waappv1.LoginStateCheck{
 		LoginStateCheckId:    s.ids.NewID("walogchk_"),
