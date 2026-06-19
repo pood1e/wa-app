@@ -30,7 +30,9 @@ func (s *Server) attachClientProfilesRuntime(ctx context.Context, profiles []*wa
 
 func deviceFingerprintFromState(state nativeState) *waappv1.DeviceFingerprint {
 	profile := normalizeNativePhoneProfile(state.Profile, "")
-	fields := profile.AdditionalMapFields
+	normalizedState := state
+	normalizedState.Profile = profile
+	fields := nativeDeviceMapFields(normalizedState)
 	createdAt := profile.CreatedAtUnix
 	if createdAt == 0 {
 		createdAt = state.CreatedAtUnix

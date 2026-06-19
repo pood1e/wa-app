@@ -568,7 +568,7 @@ func existDeviceMap(state nativeState) map[string]string {
 		"sim_state":                       "1",
 		"network_operator_name":           fields["network_operator_name"],
 		"sim_operator_name":               fields["sim_operator_name"],
-		"device_name":                     "HWTRT-Q",
+		"device_name":                     nativeDeviceDisplayName(state),
 		"feo2_query_status":               fields["feo2_query_status"],
 		"is_foa_fdid_app_installed":       "false",
 		"device_ram":                      fields["device_ram"],

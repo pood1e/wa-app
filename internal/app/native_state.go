@@ -718,15 +718,19 @@ func newNativeRegistrationDeviceModel() nativeDeviceModel {
 
 func randomNativeGenericAndroid11DeviceModel() nativeDeviceModel {
 	model := randomChoice([]string{"X", "A", "M", "N", "Z"}) + randomDigits(4) + randomUpper(2)
-	branch := randomChoice([]string{"GX", "GL", "EEA", "IN", "LA"})
 	return nativeDeviceModel{
 		Vendor:         randomNativeGenericVendor(),
 		Model:          model,
 		Android:        "11",
-		BuildDisplayID: model + "_11.0." + strconv.Itoa(randomIntRange(1, 9)) + "." + strconv.Itoa(randomIntRange(10, 999)) + "(" + branch + "01)",
+		BuildDisplayID: randomNativeGenericBuildDisplayID(model, "11"),
 		MinRAMGiB:      3.5,
 		MaxRAMGiB:      7.8,
 	}
+}
+
+func randomNativeGenericBuildDisplayID(model string, android string) string {
+	branch := randomChoice([]string{"GX", "GL", "EEA", "IN", "LA"})
+	return strings.TrimSpace(model) + "_" + strings.TrimSpace(android) + ".0." + strconv.Itoa(randomIntRange(1, 9)) + "." + strconv.Itoa(randomIntRange(10, 999)) + "(" + branch + "01)"
 }
 
 func randomNativeGenericVendor() string {
@@ -778,7 +782,35 @@ func nativeBuildDisplayIDForModel(model nativeDeviceModel) string {
 			return candidate.BuildDisplayID
 		}
 	}
-	return ""
+	return nativeSyntheticBuildDisplayID(model)
+}
+
+func nativeSyntheticBuildDisplayID(model nativeDeviceModel) string {
+	modelName := strings.TrimSpace(model.Model)
+	android := strings.TrimSpace(model.Android)
+	if modelName == "" || android == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		"byte-v-forge-wa-native-build-display-id/v1",
+		strings.TrimSpace(model.Vendor),
+		modelName,
+		android,
+	}, "|")))
+	branches := []string{"GX", "GL", "EEA", "IN", "LA"}
+	major := int(sum[0]%9) + 1
+	minor := int(binary.BigEndian.Uint16(sum[1:3])%990) + 10
+	branch := branches[int(sum[3])%len(branches)]
+	return modelName + "_" + android + ".0." + strconv.Itoa(major) + "." + strconv.Itoa(minor) + "(" + branch + "01)"
+}
+
+func nativeDeviceDisplayName(state nativeState) string {
+	profile := normalizeNativePhoneProfile(state.Profile, "")
+	value := strings.TrimSpace(strings.Join([]string{
+		strings.TrimSpace(profile.DeviceVendor),
+		strings.TrimSpace(profile.DeviceModel),
+	}, " "))
+	return firstNonEmpty(value, defaultNativeDeviceModel().Vendor+" "+defaultNativeDeviceModel().Model)
 }
 
 func parseJSONMap(text string) map[string]any {
