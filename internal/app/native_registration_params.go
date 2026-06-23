@@ -487,7 +487,9 @@ const nativeDefaultAppCampaignDownloadSource = "unknown|unknown"
 
 const defaultRegistrationTokenHMACKeyHex = "44539b934347b6f12609296e69145b58309df94ed0a8a5a2d94078a8eaff87013e3d95a69644aa1b924646532c279f8bcd2855ab55f2c8bc1693adb7800c88ff"
 
-const defaultRegistrationTokenMessagePrefixHex = "" +
+// defaultRegistrationTokenSigningCertHex 是 com.whatsapp 官方签名证书(serial 4c2536a4,
+// CN=Brian Acton)的整段 X.509 DER —— 注册 token HMAC message 的第 1 段。签名身份长期稳定。
+const defaultRegistrationTokenSigningCertHex = "" +
 	"30820332308202f0a00302010202044c2536a4300b06072a8648ce3804030500307c310b300906035504061302555331" +
 	"1330110603550408130a43616c69666f726e6961311430120603550407130b53616e746120436c617261311630140603" +
 	"55040a130d576861747341707020496e632e31143012060355040b130b456e67696e656572696e673114301206035504" +
@@ -505,19 +507,35 @@ const defaultRegistrationTokenMessagePrefixHex = "" +
 	"4b49432b6862aa48fc2a93161b2c15a2ff5e671672dfb576e9d12aaff7369b9a99d04fb29d2bbbb2a503ee41b1ff3788" +
 	"7064f41fe2805609063500a8e547349282d15981cdb58a08bede51dd7e9867295b3dfb45ffc6b259300b06072a8648ce" +
 	"3804030500032f00302c021400a602a7477acf841077237be090df436582ca2f0214350ce0268d07e71e55774ab4eacd" +
-	"4d071cd1efad228ddd386803c6f2480473cded35085d"
+	"4d071cd1efad"
 
+// defaultRegistrationTokenClassesDexMD5Hex 是本 APK(2.26.24.77 / versionCode 262407730)
+// classes.dex 的 MD5 —— 注册 token HMAC message 的第 2 段。**随 APK 版本变化**:每次升级 APK
+// 都要用新 classes.dex 重算,否则服务端按 versionCode 校验 token 失败,/v2/code 返回 bad_token。
+const defaultRegistrationTokenClassesDexMD5Hex = "f9d51293993c4312324f87d3cf8bb931"
+
+// deriveDefaultRegistrationToken 复刻 APK 2.26.24.77 注册 token 生成(LX/HxB.A01):
+//
+//	base64_std( HMAC-SHA1(key, certDER || MD5(classes.dex) || national) )
+//
+// key 是 PBKDF2WithHmacSHA1And8BIT(salt=HTA.A00, pw=utf8(pkg)||about_logo_hdpi.png,
+// iter=128, 512bit) 的派生结果,已离线预算并固化为 defaultRegistrationTokenHMACKeyHex。
 func deriveDefaultRegistrationToken(phone string) string {
 	key, err := hex.DecodeString(defaultRegistrationTokenHMACKeyHex)
 	if err != nil {
 		return ""
 	}
-	prefix, err := hex.DecodeString(defaultRegistrationTokenMessagePrefixHex)
+	cert, err := hex.DecodeString(defaultRegistrationTokenSigningCertHex)
+	if err != nil {
+		return ""
+	}
+	classesDexMD5, err := hex.DecodeString(defaultRegistrationTokenClassesDexMD5Hex)
 	if err != nil {
 		return ""
 	}
 	mac := hmac.New(sha1.New, key)
-	_, _ = mac.Write(prefix)
+	_, _ = mac.Write(cert)
+	_, _ = mac.Write(classesDexMD5)
 	_, _ = mac.Write([]byte(phone))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
