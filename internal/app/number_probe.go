@@ -10,10 +10,7 @@ import (
 	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
 )
 
-const (
-	numberProbeProxyRouteTTL = time.Minute
-	numberProbeMaxAttempts   = 3
-)
+const numberProbeMaxAttempts = 3
 
 func (s *Server) ProbeNumberSMS(ctx context.Context, payload map[string]any) (map[string]any, error) {
 	if payload == nil {
@@ -57,27 +54,21 @@ func (s *Server) ProbeNumberSMS(ctx context.Context, payload map[string]any) (ma
 }
 
 func (s *Server) probeNumberSMSAttempt(ctx context.Context, payload map[string]any, ctxData *waappv1.RequestContext, phone *waappv1.PhoneTarget, engine *NativeEngine, attempt int) (map[string]any, WAProxyRoute, bool, string) {
-	route, proxyURL, proxy, releaseProxy, err := s.numberProbeProxy(ctx, payload)
-	if err != nil {
-		result := numberProbeProxyFailure(payload, err)
-		annotateNumberProbeAttempt(result, attempt)
-		return result, WAProxyRoute{}, false, ""
-	}
-
+	route, proxyURL, proxy := s.numberProbeProxy(payload)
 	probeEngine := engine
 	defer func() {
 		if proxyURL != "" {
 			probeEngine.CloseIdleConnections()
 		}
-		releaseProxy()
 	}()
 	if proxyURL != "" {
-		probeEngine, err = engine.WithProxyURL(proxyURL)
+		proxied, err := engine.WithProxyURL(proxyURL)
 		if err != nil {
 			result := numberProbeError(payload, err)
 			annotateNumberProbeAttempt(result, attempt)
 			return result, route, false, ""
 		}
+		probeEngine = proxied
 	}
 	state, err := probeEngine.newState(phone)
 	if err != nil {
@@ -100,34 +91,15 @@ func (s *Server) probeNumberSMSAttempt(ctx context.Context, payload map[string]a
 	return result, route, false, ""
 }
 
-func (s *Server) numberProbeProxy(ctx context.Context, payload map[string]any) (WAProxyRoute, string, map[string]any, func(), error) {
-	route, useProxy, err := s.resolveWAProxyRoute(ctx, waProxyResolveRequest{
-		Stage:       waProxyStageProbe,
+func (s *Server) numberProbeProxy(payload map[string]any) (WAProxyRoute, string, map[string]any) {
+	route, useProxy := s.resolveWAProxyRoute(waProxyResolveRequest{
 		Payload:     payload,
-		WAAccountID: textField(payload, "wa_account_id"),
 		CountryCode: proxyCountryCodeFromPayload(payload),
 	})
-	if err != nil {
-		return WAProxyRoute{}, "", nil, func() {}, err
-	}
 	if !useProxy {
-		return route, "", waProxySummary(route, false), func() {}, nil
+		return route, "", waProxySummary(route, false)
 	}
-	gateway := &actionGateway{server: s}
-	// Registration proxy lease is optional: when configured it upgrades the
-	// common proxy to a dedicated leased route; otherwise the probe rides the
-	// common proxy. acquireRegistrationProxyLease only returns an error in
-	// required mode, so an unavailable lease falls back to the common proxy.
-	lease, leasedRoute, err := gateway.acquireRegistrationProxyLease(ctx, payload, route, numberProbeProxyRouteTTL)
-	if err != nil {
-		return WAProxyRoute{}, "", nil, func() {}, err
-	}
-	release := func() {}
-	if validRegistrationProxyLease(lease) {
-		route = leasedRoute
-		release = func() { gateway.releaseRegistrationProxyLease(context.Background(), lease) }
-	}
-	return route, route.ProxyURL, waProxySummary(route, true), release, nil
+	return route, route.ProxyURL, waProxySummary(route, true)
 }
 
 func buildNumberProbeResult(input map[string]any, proxy map[string]any, fingerprint map[string]any, account map[string]any, sms map[string]any) map[string]any {

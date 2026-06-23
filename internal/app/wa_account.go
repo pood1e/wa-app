@@ -7,7 +7,6 @@ import (
 	"time"
 
 	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var waAccountIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$`)
@@ -30,7 +29,6 @@ func withWAAccountStatus(account *waappv1.WAAccount, status waappv1.WAAccountSta
 	}
 	next := newWAAccount(waAccountID(account), account.GetDisplayName(), account.GetPhone(), status, audit(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(account.GetTwoFactorAuth())
-	next.ProxyPolicy = cloneWAAccountProxyPolicy(account.GetProxyPolicy())
 	return next
 }
 
@@ -41,7 +39,6 @@ func withWAAccountDisplayName(account *waappv1.WAAccount, displayName string, up
 	}
 	next := newWAAccount(waAccountID(account), displayName, account.GetPhone(), waAccountStatus(account), audit(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(account.GetTwoFactorAuth())
-	next.ProxyPolicy = cloneWAAccountProxyPolicy(account.GetProxyPolicy())
 	return next
 }
 
@@ -52,18 +49,6 @@ func withWAAccountTwoFactorAuthStatus(account *waappv1.WAAccount, status *waappv
 	}
 	next := newWAAccount(waAccountID(account), account.GetDisplayName(), account.GetPhone(), waAccountStatus(account), audit(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(status)
-	next.ProxyPolicy = cloneWAAccountProxyPolicy(account.GetProxyPolicy())
-	return next
-}
-
-func withWAAccountProxyPolicy(account *waappv1.WAAccount, policy *waappv1.WAAccountProxyPolicy, updatedAt time.Time) *waappv1.WAAccount {
-	createdAt := waAccountCreatedAt(account)
-	if createdAt.IsZero() {
-		createdAt = updatedAt
-	}
-	next := newWAAccount(waAccountID(account), account.GetDisplayName(), account.GetPhone(), waAccountStatus(account), audit(createdAt, updatedAt))
-	next.TwoFactorAuth = cloneTwoFactorAuthStatus(account.GetTwoFactorAuth())
-	next.ProxyPolicy = cloneWAAccountProxyPolicy(policy)
 	return next
 }
 
@@ -77,108 +62,6 @@ func cloneTwoFactorAuthStatus(status *waappv1.TwoFactorAuthStatus) *waappv1.TwoF
 		EmailAddress:    strings.TrimSpace(status.GetEmailAddress()),
 		EmailVerified:   status.GetEmailVerified(),
 		EmailConfirmed:  status.GetEmailConfirmed(),
-	}
-}
-
-func cloneWAAccountProxyPolicy(policy *waappv1.WAAccountProxyPolicy) *waappv1.WAAccountProxyPolicy {
-	if policy == nil {
-		return nil
-	}
-	normalized := &waappv1.WAAccountProxyPolicy{
-		DefaultPolicy:      cloneWAProxyStagePolicy(policy.GetDefaultPolicy()),
-		ProbePolicy:        cloneWAProxyStagePolicy(policy.GetProbePolicy()),
-		RegistrationPolicy: cloneWAProxyStagePolicy(policy.GetRegistrationPolicy()),
-	}
-	if emptyWAAccountProxyPolicy(normalized) {
-		return nil
-	}
-	return normalized
-}
-
-func cloneWAProxyStagePolicy(policy *waappv1.WAProxyStagePolicy) *waappv1.WAProxyStagePolicy {
-	if policy == nil {
-		return nil
-	}
-	mode := normalizeWAProxyPolicyMode(policy.GetMode())
-	if mode == waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_INHERIT {
-		return nil
-	}
-	return &waappv1.WAProxyStagePolicy{Mode: mode}
-}
-
-func normalizeWAProxyPolicyMode(mode waappv1.WAProxyPolicyMode) waappv1.WAProxyPolicyMode {
-	if mode == waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_UNSPECIFIED {
-		return waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_INHERIT
-	}
-	return mode
-}
-
-func emptyWAAccountProxyPolicy(policy *waappv1.WAAccountProxyPolicy) bool {
-	if policy == nil {
-		return true
-	}
-	return emptyWAProxyStagePolicy(policy.GetDefaultPolicy()) &&
-		emptyWAProxyStagePolicy(policy.GetProbePolicy()) &&
-		emptyWAProxyStagePolicy(policy.GetRegistrationPolicy())
-}
-
-func emptyWAProxyStagePolicy(policy *waappv1.WAProxyStagePolicy) bool {
-	return policy == nil || normalizeWAProxyPolicyMode(policy.GetMode()) == waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_INHERIT
-}
-
-func waAccountProxyPolicyJSON(policy *waappv1.WAAccountProxyPolicy) string {
-	normalized := cloneWAAccountProxyPolicy(policy)
-	if normalized == nil {
-		return "{}"
-	}
-	marshaler := protojson.MarshalOptions{UseProtoNames: true}
-	data, err := marshaler.Marshal(normalized)
-	if err != nil {
-		return "{}"
-	}
-	return string(data)
-}
-
-func waAccountProxyPolicyFromJSON(value string) *waappv1.WAAccountProxyPolicy {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "{}" || value == "null" {
-		return nil
-	}
-	policy := &waappv1.WAAccountProxyPolicy{}
-	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
-	if err := unmarshaler.Unmarshal([]byte(value), policy); err != nil {
-		return nil
-	}
-	return cloneWAAccountProxyPolicy(policy)
-}
-
-func validateWAAccountProxyPolicy(policy *waappv1.WAAccountProxyPolicy) error {
-	if policy == nil {
-		return nil
-	}
-	for name, stage := range map[string]*waappv1.WAProxyStagePolicy{
-		"default_policy":      policy.GetDefaultPolicy(),
-		"probe_policy":        policy.GetProbePolicy(),
-		"registration_policy": policy.GetRegistrationPolicy(),
-	} {
-		if err := validateWAProxyStagePolicy(name, stage); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateWAProxyStagePolicy(name string, policy *waappv1.WAProxyStagePolicy) error {
-	if policy == nil {
-		return nil
-	}
-	switch normalizeWAProxyPolicyMode(policy.GetMode()) {
-	case waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_INHERIT,
-		waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_DIRECT,
-		waappv1.WAProxyPolicyMode_WA_PROXY_POLICY_MODE_COMMON_PROXY:
-		return nil
-	default:
-		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_VALIDATION_FAILED, name+" proxy mode is unsupported", false)
 	}
 }
 

@@ -22,11 +22,10 @@ const registrationAttemptStateTTL = 26 * time.Hour
 const registrationOTPWaitDefaultTTL = 20 * time.Minute
 
 type registrationOTPWait struct {
-	WAAccountID           string                 `json:"wa_account_id"`
-	VerificationRequestID string                 `json:"verification_request_id"`
-	ResumeURL             string                 `json:"resume_url"`
-	CreatedAtUnix         int64                  `json:"created_at_unix"`
-	ProxyLease            registrationProxyLease `json:"proxy_lease,omitempty"`
+	WAAccountID           string `json:"wa_account_id"`
+	VerificationRequestID string `json:"verification_request_id"`
+	ResumeURL             string `json:"resume_url"`
+	CreatedAtUnix         int64  `json:"created_at_unix"`
 }
 
 type actionGateway struct{ server *Server }
@@ -85,15 +84,10 @@ func (g *actionGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *actionGateway) proxySettings(ctx context.Context, payload map[string]any) (map[string]any, error) {
-	route, useProxy, err := g.server.resolveWAProxyRoute(ctx, waProxyResolveRequest{
-		Stage:       waProxyStageRegistration,
+	route, useProxy := g.server.resolveWAProxyRoute(waProxyResolveRequest{
 		Payload:     payload,
-		WAAccountID: textField(payload, "wa_account_id"),
 		CountryCode: proxyCountryCodeFromPayload(payload),
 	})
-	if err != nil {
-		return nil, err
-	}
 	out := waProxySummary(route, useProxy)
 	out["preflight"] = false
 	return out, nil
@@ -151,14 +145,6 @@ func (g *actionGateway) commitFingerprint(ctx context.Context, payload map[strin
 	if err != nil {
 		return nil, err
 	}
-	if policy, err := waAccountProxyPolicyFromPayload(payload); err != nil {
-		return nil, err
-	} else if policy != nil {
-		account, err = g.server.saveWAAccount(ctx, withWAAccountProxyPolicy(account, policy, g.server.clock.Now()))
-		if err != nil {
-			return nil, err
-		}
-	}
 	_ = g.server.runtime.DeleteTransientState(ctx, ref)
 	return map[string]any{
 		"success":             true,
@@ -174,7 +160,7 @@ func (g *actionGateway) requestSMSOTP(ctx context.Context, payload map[string]an
 	if reason := directRegistrationMethodUnsupportedReason(method); reason != "" {
 		return registrationMethodUnsupportedMap(method, reason), nil
 	}
-	runner, route, managedRoute, proxyLease, err := g.registrationRequestRunner(ctx, payload)
+	runner, route, managedRoute, err := g.registrationRunner(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -188,30 +174,13 @@ func (g *actionGateway) requestSMSOTP(ctx context.Context, payload map[string]an
 	}, runner)
 	runner.CloseIdleConnections()
 	if err != nil {
-		g.releaseRegistrationProxyLease(context.Background(), proxyLease)
 		return nil, err
 	}
 	if resp.GetError() != nil {
-		g.releaseRegistrationProxyLease(context.Background(), proxyLease)
 		return map[string]any{"success": false, "error": protoMap(resp.GetError()), "error_message": resp.GetError().GetMessage()}, nil
 	}
 	record := resp.GetVerificationRequest()
 	success := record.GetStatus() == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_SENT || record.GetStatus() == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_WAITING
-	if !success {
-		g.releaseRegistrationProxyLease(context.Background(), proxyLease)
-	}
-	if success && validRegistrationProxyLease(proxyLease) {
-		wait := registrationOTPWait{
-			WAAccountID:           record.GetWaAccountId(),
-			VerificationRequestID: record.GetVerificationRequestId(),
-			CreatedAtUnix:         time.Now().UTC().Unix(),
-			ProxyLease:            proxyLease,
-		}
-		if err := g.saveRegistrationOTPWait(ctx, wait, registrationOTPWaitDefaultTTL); err != nil {
-			g.releaseRegistrationProxyLease(context.Background(), proxyLease)
-			return nil, err
-		}
-	}
 	response := map[string]any{
 		"success":                 success,
 		"status":                  record.GetStatus().String(),
@@ -234,11 +203,6 @@ func (g *actionGateway) awaitOTP(ctx context.Context, payload map[string]any) (m
 	wait, ttl, err := registrationOTPWaitFromPayload(payload)
 	if err != nil {
 		return nil, err
-	}
-	if wait.ProxyLease.LeaseID == "" && g.server.registrationProxyLeaseEnabled() {
-		if existing, err := g.loadRegistrationOTPWait(ctx, wait.WAAccountID, wait.VerificationRequestID); err == nil {
-			wait.ProxyLease = existing.ProxyLease
-		}
 	}
 	if err := g.saveRegistrationOTPWait(ctx, wait, ttl); err != nil {
 		return nil, err
@@ -264,7 +228,6 @@ func (g *actionGateway) resumeOTP(ctx context.Context, payload map[string]any) (
 		if err := postRegistrationOTPResume(ctx, wait, code); err != nil {
 			return nil, err
 		}
-		g.releaseRegistrationProxyLease(context.Background(), wait.ProxyLease)
 		_ = g.deleteRegistrationOTPWait(ctx, wait)
 		return map[string]any{"success": true, "wa_account_id": wait.WAAccountID, "verification_request_id": wait.VerificationRequestID}, nil
 	}
@@ -391,7 +354,7 @@ func registrationOTPWaitAccountKey(waAccountIDValue string) string {
 }
 
 func (g *actionGateway) submitOTP(ctx context.Context, payload map[string]any) (map[string]any, error) {
-	runner, route, managedRoute, proxyLease, err := g.registrationSubmitRunner(ctx, payload)
+	runner, route, managedRoute, err := g.registrationRunner(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +372,6 @@ func (g *actionGateway) submitOTP(ctx context.Context, payload map[string]any) (
 	}
 	success := resp.GetRegistration().GetStatus() == waappv1.RegistrationStatus_REGISTRATION_STATUS_REGISTERED && resp.GetLoginState().GetStatus() == waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE
 	if success {
-		g.releaseRegistrationProxyLease(context.Background(), proxyLease)
 		_ = g.deleteRegistrationOTPWait(ctx, registrationOTPWait{
 			WAAccountID:           resp.GetRegistration().GetWaAccountId(),
 			VerificationRequestID: resp.GetRegistration().GetVerificationRequestId(),
@@ -507,16 +469,10 @@ func (g *actionGateway) cleanupFailedRegistration(ctx context.Context, payload m
 	accountID := cleanupWAAccountID(payload)
 	verificationRequestID := cleanupVerificationRequestID(payload)
 	if verificationRequestID != "" || accountID != "" {
-		wait, err := g.loadRegistrationOTPWait(ctx, accountID, verificationRequestID)
-		if err == nil {
-			g.releaseRegistrationProxyLease(context.Background(), wait.ProxyLease)
-			_ = g.deleteRegistrationOTPWait(ctx, wait)
-		} else {
-			_ = g.deleteRegistrationOTPWait(ctx, registrationOTPWait{
-				WAAccountID:           accountID,
-				VerificationRequestID: verificationRequestID,
-			})
-		}
+		_ = g.deleteRegistrationOTPWait(ctx, registrationOTPWait{
+			WAAccountID:           accountID,
+			VerificationRequestID: verificationRequestID,
+		})
 	}
 	if accountID == "" {
 		return map[string]any{"success": true, "deleted": false, "reason": "missing_wa_account_id"}, nil
@@ -702,72 +658,23 @@ func (g *actionGateway) nativeEngineForPayload(payload map[string]any) (*NativeE
 	return engine.WithProxyURL(proxyURL)
 }
 
-func (g *actionGateway) registrationRequestRunner(ctx context.Context, payload map[string]any) (*NativeEngine, WAProxyRoute, bool, registrationProxyLease, error) {
+func (g *actionGateway) registrationRunner(payload map[string]any) (*NativeEngine, WAProxyRoute, bool, error) {
 	engine, err := g.nativeEngine()
 	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
+		return nil, WAProxyRoute{}, false, err
 	}
-	route, useProxy, err := g.server.resolveWAProxyRoute(ctx, waProxyResolveRequest{
-		Stage:       waProxyStageRegistration,
+	route, useProxy := g.server.resolveWAProxyRoute(waProxyResolveRequest{
 		Payload:     payload,
-		WAAccountID: textField(payload, "wa_account_id"),
 		CountryCode: proxyCountryCodeFromPayload(payload),
 	})
-	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-	}
 	if !useProxy {
-		return engine, route, false, registrationProxyLease{}, nil
-	}
-	lease, leasedRoute, err := g.acquireRegistrationProxyLease(ctx, payload, route, registrationOTPWaitDefaultTTL)
-	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-	}
-	if validRegistrationProxyLease(lease) {
-		route = leasedRoute
+		return engine, route, false, nil
 	}
 	proxied, err := engine.WithProxyURL(route.ProxyURL)
 	if err != nil {
-		g.releaseRegistrationProxyLease(context.Background(), lease)
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
+		return nil, WAProxyRoute{}, false, err
 	}
-	return proxied, route, true, lease, nil
-}
-
-func (g *actionGateway) registrationSubmitRunner(ctx context.Context, payload map[string]any) (*NativeEngine, WAProxyRoute, bool, registrationProxyLease, error) {
-	engine, err := g.nativeEngine()
-	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-	}
-	if wait, err := g.loadRegistrationOTPWait(ctx, textField(payload, "wa_account_id"), textField(payload, "verification_request_id")); err == nil && g.server.registrationProxyLeaseEnabled() && validRegistrationProxyLease(wait.ProxyLease) {
-		route := registrationProxyLeaseRoute(wait.ProxyLease, WAProxyRoute{Source: waProxySourceSystemCommon, PolicyMode: waProxyModeCommon})
-		proxied, err := engine.WithProxyURL(route.ProxyURL)
-		if err != nil {
-			return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-		}
-		return proxied, route, true, wait.ProxyLease, nil
-	}
-	route, useProxy, err := g.registrationSubmitProxyRoute(ctx, payload)
-	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-	}
-	if !useProxy {
-		return engine, route, false, registrationProxyLease{}, nil
-	}
-	proxied, err := engine.WithProxyURL(route.ProxyURL)
-	if err != nil {
-		return nil, WAProxyRoute{}, false, registrationProxyLease{}, err
-	}
-	return proxied, route, true, registrationProxyLease{}, nil
-}
-
-func (g *actionGateway) registrationSubmitProxyRoute(ctx context.Context, payload map[string]any) (WAProxyRoute, bool, error) {
-	return g.server.resolveWAProxyRoute(ctx, waProxyResolveRequest{
-		Stage:       waProxyStageRegistration,
-		Payload:     payload,
-		WAAccountID: textField(payload, "wa_account_id"),
-		CountryCode: proxyCountryCodeFromPayload(payload),
-	})
+	return proxied, route, true, nil
 }
 
 func registrationProxyRouteMap(route WAProxyRoute, managed bool) map[string]any {
@@ -898,26 +805,6 @@ func phoneFromAction(payload map[string]any) *waappv1.PhoneTarget {
 		NationalNumber:     firstNonEmpty(textField(phone, "national_number"), textField(payload, "national_number"), textField(payload, "phone"), textField(payload, "number")),
 		CountryIso2:        firstNonEmpty(textField(phone, "country_iso2"), textField(payload, "country_iso2"), textField(payload, "country_code")),
 	}
-}
-
-func waAccountProxyPolicyFromPayload(payload map[string]any) (*waappv1.WAAccountProxyPolicy, error) {
-	raw := objectField(payload, "proxy_policy")
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return nil, err
-	}
-	policy := &waappv1.WAAccountProxyPolicy{}
-	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
-	if err := unmarshaler.Unmarshal(data, policy); err != nil {
-		return nil, NewError(waappv1.WaErrorCode_WA_ERROR_CODE_VALIDATION_FAILED, "proxy_policy is invalid", false)
-	}
-	if err := validateWAAccountProxyPolicy(policy); err != nil {
-		return nil, err
-	}
-	return cloneWAAccountProxyPolicy(policy), nil
 }
 
 func objectField(data map[string]any, key string) map[string]any {

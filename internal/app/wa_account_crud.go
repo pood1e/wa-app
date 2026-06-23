@@ -20,10 +20,6 @@ func (s *Server) saveWAAccount(ctx context.Context, account *waappv1.WAAccount) 
 	account.DisplayName = strings.TrimSpace(account.GetDisplayName())
 	account.Phone = normalizePhone(account.GetPhone())
 	account.Status = normalizeWAAccountStatus(account.GetStatus())
-	if err := validateWAAccountProxyPolicy(account.GetProxyPolicy()); err != nil {
-		return nil, err
-	}
-	account.ProxyPolicy = cloneWAAccountProxyPolicy(account.GetProxyPolicy())
 	if err := s.store.SaveWAAccount(ctx, account); err != nil {
 		return nil, err
 	}

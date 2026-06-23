@@ -123,7 +123,6 @@ type waAccountRow struct {
 	twoFactorEmailAddress    sql.NullString
 	twoFactorEmailVerified   sql.NullBool
 	twoFactorEmailConfirmed  sql.NullBool
-	proxyPolicyJSON          string
 	createdAt                time.Time
 	updatedAt                time.Time
 }
@@ -144,7 +143,6 @@ func (r waAccountRow) toProto() *waappv1.WAAccount {
 			EmailConfirmed:  r.twoFactorEmailConfirmed.Bool,
 		}
 	}
-	account.ProxyPolicy = waAccountProxyPolicyFromJSON(r.proxyPolicyJSON)
 	return account
 }
 

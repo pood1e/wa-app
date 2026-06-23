@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS wa_accounts (
   two_factor_email_address TEXT,
   two_factor_email_verified BOOLEAN,
   two_factor_email_confirmed BOOLEAN,
-  proxy_policy_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -44,7 +43,7 @@ ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_configured BOO
 ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_address TEXT;
 ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_verified BOOLEAN;
 ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_confirmed BOOLEAN;
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS proxy_policy_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE wa_accounts DROP COLUMN IF EXISTS proxy_policy_json;
 
 CREATE TABLE IF NOT EXISTS wa_client_profiles (
   client_profile_id TEXT PRIMARY KEY,
