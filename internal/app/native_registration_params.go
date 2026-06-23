@@ -568,8 +568,8 @@ func parseExistProbeResult(data map[string]any) EngineProbeResult {
 		methodStatuses = upsertVerificationMethodStatus(methodStatuses, "acc_tr", verificationWaitStatus{Present: true})
 	}
 	protocolRejected := baseProtocolRejected
-	notRegistered := false
-	registeredKnown := registered || invalidNumber
+	notRegistered := !baseProtocolRejected && !blocked && !invalidNumber && !rateLimited && !registered && existNotRegisteredReason(reason)
+	registeredKnown := registered || invalidNumber || notRegistered
 	canSendSMS := smsProbeAvailableByCooldownOnly(smsWait, smsWaitExhausted, blocked, protocolRejected, invalidNumber, rateLimited)
 	methods := methodsFromStatuses(methodStatuses)
 	reachable := !protocolRejected && !blocked && !invalidNumber && !rateLimited && (existReachableStatus(status) || registered || notRegistered || status != "" || reason != "")
@@ -657,6 +657,17 @@ func existRateLimitedReason(reason string) bool {
 		return false
 	}
 }
+
+// existNotRegisteredReason reports reasons that the same-device check
+// (KotlinRegistrationBridge.parseSameDeviceCheckResponse) treats as "no
+// existing account on this device, proceed to normal registration".
+// "incorrect" is the canonical such verdict: it is an expected /v2/exist
+// response, not a request error, so the probe resolves to a definitive
+// not-registered/registrable result instead of the reachable catch-all.
+func existNotRegisteredReason(reason string) bool {
+	return reason == "incorrect"
+}
+
 func existRegisteredSignal(status string, reason string, data map[string]any) bool {
 	if existRegisteredReason(reason) {
 		return true
