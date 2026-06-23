@@ -14,15 +14,15 @@ import (
 const (
 	nativeGPIAErrorCode    = -2
 	nativeGPIAPackageName  = "com.whatsapp"
-	nativeGPIASourceSize   = "141711087"
-	nativeGPIASourceDigest = "b3BumN//vPO0GypN5i+xXvNznZyGiXOT99Jip70omCg="
+	nativeGPIASourceSize   = "141896808"
+	nativeGPIASourceDigest = "Osq4rcTiHZAOGoPRfEuPX9fBX5w+IanRQ3Rczay4yHE="
 	// Full app-release APK SHA-256/Base64; native bootstrap stores this in
 	// global 0xc45a48 for GPIA sha256/_is.
-	nativeGPIASourceFullDigest = "vJrNuYDSuWUZ87O1W5+xs/2g74mwPA2JO+dkqjlJZG4="
+	nativeGPIASourceFullDigest = "l+Cxm/2+TxcFMB2bKnIDlwIgk2YUgiUnhGYws9XjCW0="
 	nativeGPIACertDigest       = "OKD31QX+GP7GT780Psqq8xDb15k="
-	nativeGPIAClassesDigest    = "qoblldcHz4lA84Sgs1QLZWPpd6YKG25zf0GwJZdTHXk="
-	nativeGPIANativeLibDigest  = "G9McgxRaSjtq92o7zx0fbf3Ak7+SPmxxNyvNXS01hlM="
-	nativeGPIADataSODigest     = "SrL/HHWX9VAinH9OV4eloGSQLWSsUug93h5YGGad17s="
+	nativeGPIAClassesDigest    = "x4woWJaRyXusuP+MRZNlKP9q/zi9TXPPdwkZpEoKVeU="
+	nativeGPIANativeLibDigest  = "KMr1FDZ5Qv9UsYvUwaPmFmshuABXLq3rfxeELvAebKk="
+	nativeGPIADataSODigest     = "/2slt0vplE6OE7wMz/C41mG1HvIdraHa5P/RB1MWGW0="
 )
 
 type nativeGPIAMaterial struct {

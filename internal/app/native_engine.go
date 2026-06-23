@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultWAAppVersion  = "2.26.23.71"
+	defaultWAAppVersion  = "2.26.24.77"
 	defaultWAABPropURL   = "https://y9yrsygcg6.execute-api.us-east-1.amazonaws.com/s/s?_=/v2/reg_onboard_abprop&"
 	defaultWAExistURL    = "https://y9yrsygcg6.execute-api.us-east-1.amazonaws.com/s/s?_=/v2/exist&"
 	defaultWACodeURL     = "https://y9yrsygcg6.execute-api.us-east-1.amazonaws.com/s/s?_=/v2/code&"

@@ -94,11 +94,9 @@ func (e *NativeEngine) codeRequestOrderedParamsWithWamsys(ctx context.Context, p
 	if nativeShouldSendRegistrationGPIA(state) {
 		applyOrderedWamsysKey(&params, capture, "gpia")
 	}
-	addOptionalRawParam(&params, "db", fields["db"])
-	addOptionalRawParam(&params, "recaptcha", fields["recaptcha"])
-	applyNativeCodeRequestOptionalTailParams(&params, fields)
 	applyOrderedWamsysExcept(&params, capture, map[string]struct{}{"gpia": {}})
 	addOptionalRawParam(&params, "feo2_query_status", fields["feo2_query_status"])
+	addOptionalRawParam(&params, "code_entrypoint", fields["code_entrypoint"])
 	return params, nil
 }
 
@@ -120,24 +118,12 @@ func applyNativeE2EParams(params *orderedParams, state nativeState) {
 	params.set("e_skey_sig", state.KeyBundle.SignedKeySig, false)
 }
 
+// applyNativeCodeRequestMapParams 装配 /v2/code 的设备 Map，字段集与顺序对齐 APK
+// KotlinRegistrationBridge 经 IAo.A0E/A0H/A0L/A0O/A0W 装配的 code 路径 Map。
+// 注意：mcc/mnc/sim_mcc/sim_mnc、rc2/rc、airplane_mode_on 等均属 code 路径；
+// device_ram/old_phone_number/db/recaptcha/fid/preloads_*/tos_version/entrypoint/cred_token
+// 是 exist 路径字段，不在 /v2/code，发送会让请求偏离官方端 shape 触发 no_routes。
 func applyNativeCodeRequestMapParams(params *orderedParams, fields map[string]string, method string, attempts int, reason string) {
-	if method == "sms" {
-		addOptionalRawParam(params, "mistyped", fields["mistyped"])
-		addRawParam(params, "reason", reason)
-		addOptionalRawParam(params, "hasav", fields["hasav"])
-		addRawParam(params, "client_metrics", nativeCodeClientMetrics(attempts))
-		addOptionalRawParam(params, "mcc", fields["mcc"])
-		addOptionalRawParam(params, "mnc", fields["mnc"])
-		addOptionalRawParam(params, "sim_mcc", fields["sim_mcc"])
-		addOptionalRawParam(params, "sim_mnc", fields["sim_mnc"])
-		addRawParam(params, "education_screen_displayed", "false")
-		addRawParam(params, "prefer_sms_over_flash", nativePreferSMSOverFlash(method, fields))
-		applyNativeCodeRequestRuntimeParams(params, fields, method)
-		applyNativeCodeRequestStoredParams(params, fields)
-		addOptionalRawParam(params, "old_phone_number", fields["old_phone_number"])
-		addOptionalRawParam(params, "device_ram", fields["device_ram"])
-		return
-	}
 	addOptionalRawParam(params, "mistyped", fields["mistyped"])
 	addRawParam(params, "reason", reason)
 	addOptionalRawParam(params, "hasav", fields["hasav"])
@@ -150,29 +136,17 @@ func applyNativeCodeRequestMapParams(params *orderedParams, fields map[string]st
 	addRawParam(params, "prefer_sms_over_flash", nativePreferSMSOverFlash(method, fields))
 	addOptionalRawParam(params, "network_radio_type", fields["network_radio_type"])
 	addOptionalRawParam(params, "simnum", fields["simnum"])
+	addOptionalRawParam(params, "rc2", fields["rc2"])
 	addOptionalRawParam(params, "hasinrc", fields["hasinrc"])
 	addOptionalRawParam(params, "pid", fields["pid"])
 	addOptionalRawParam(params, "rc", fields["rc"])
 	applyNativeCodeRequestSIMSignalParams(params, fields)
 	applyNativeCodeRequestStoredParams(params, fields)
-	addOptionalRawParam(params, "old_phone_number", fields["old_phone_number"])
-	addOptionalRawParam(params, "device_ram", fields["device_ram"])
-}
-
-func applyNativeCodeRequestRuntimeParams(params *orderedParams, fields map[string]string, method string) {
-	if method != "sms" {
-		return
-	}
-	addOptionalRawParam(params, "network_radio_type", fields["network_radio_type"])
-	addOptionalRawParam(params, "simnum", fields["simnum"])
-	addOptionalRawParam(params, "hasinrc", fields["hasinrc"])
-	addOptionalRawParam(params, "pid", fields["pid"])
-	addOptionalRawParam(params, "rc", fields["rc"])
-	applyNativeCodeRequestSIMSignalParams(params, fields)
 }
 
 func applyNativeCodeRequestSIMSignalParams(params *orderedParams, fields map[string]string) {
 	addOptionalRawParam(params, "sim_type", fields["sim_type"])
+	addOptionalRawParam(params, "airplane_mode_on", fields["airplane_mode_on"])
 	addOptionalRawParam(params, "airplane_mode_type", fields["airplane_mode_type"])
 	addOptionalRawParam(params, "cellular_strength", fields["cellular_strength"])
 	addOptionalRawParam(params, "roaming_type", fields["roaming_type"])
@@ -181,15 +155,6 @@ func applyNativeCodeRequestSIMSignalParams(params *orderedParams, fields map[str
 func applyNativeCodeRequestStoredParams(params *orderedParams, fields map[string]string) {
 	addOptionalRawParam(params, "push_code", fields["push_code"])
 	addOptionalRawParam(params, "new_acc_uuid", fields["new_acc_uuid"])
-}
-
-func applyNativeCodeRequestOptionalTailParams(params *orderedParams, fields map[string]string) {
-	addOptionalRawParam(params, "fid", fields["fid"])
-	addOptionalRawParam(params, "preloads_app_manager_id", fields["preloads_app_manager_id"])
-	addOptionalRawParam(params, "preloads_attribution", fields["preloads_attribution"])
-	addOptionalRawParam(params, "tos_version", fields["tos_version"])
-	addOptionalRawParam(params, "entrypoint", fields["entrypoint"])
-	addOptionalRawParam(params, "cred_token", fields["cred_token"])
 }
 
 func addOptionalRawParam(params *orderedParams, key string, value string) {
@@ -310,12 +275,10 @@ func codeDeviceMap(method string, state nativeState) map[string]string {
 		"prefer_sms_over_flash":      nativePreferSMSOverFlash(method, fields),
 		"network_radio_type":         fields["network_radio_type"],
 		"simnum":                     fields["simnum"],
+		"rc2":                        fields["rc2"],
 		"hasinrc":                    fields["hasinrc"],
 		"pid":                        fields["pid"],
 		"rc":                         fields["rc"],
-		"device_ram":                 fields["device_ram"],
-		"db":                         fields["db"],
-		"recaptcha":                  fields["recaptcha"],
 		"mcc":                        fields["mcc"],
 		"mnc":                        fields["mnc"],
 		"sim_mcc":                    fields["sim_mcc"],
@@ -324,9 +287,8 @@ func codeDeviceMap(method string, state nativeState) map[string]string {
 	addNonEmptyNativeCodeField(out, fields, "mistyped")
 	addNonEmptyNativeCodeField(out, fields, "hasav")
 	for _, key := range []string{
-		"sim_type", "airplane_mode_type", "cellular_strength", "roaming_type",
-		"push_code", "new_acc_uuid", "old_phone_number", "fid", "preloads_app_manager_id",
-		"preloads_attribution", "tos_version", "entrypoint", "cred_token",
+		"sim_type", "airplane_mode_on", "airplane_mode_type", "cellular_strength", "roaming_type",
+		"push_code", "new_acc_uuid", "code_entrypoint",
 	} {
 		addNonEmptyNativeCodeField(out, fields, key)
 	}
@@ -419,6 +381,8 @@ func nativeDefaultDeviceMapFields() map[string]string {
 		"simnum":                "0",
 		"hasinrc":               "1",
 		"rc":                    "0",
+		"rc2":                   "0",
+		"airplane_mode_on":      "0",
 		"device_ram":            nativeDefaultDeviceRAMGiB,
 		"db":                    nativeDefaultDebugBridgeStatus,
 		"recaptcha":             `{"stage":"ABPROP_DISABLED"}`,
