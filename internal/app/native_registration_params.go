@@ -522,6 +522,11 @@ func deriveDefaultRegistrationToken(phone string) string {
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
+// existDeviceMap 装配 /v2/exist 设备 Map,字段集对齐 APK 的 IAo.A0h(exist 路径)。
+// 关键:exist 不发 mcc/mnc/sim_mcc/sim_mnc —— 产出这 4 个的 IAo.A0H 仅被 code(A0E)
+// 与 verify(A0F)调用,A0h 全链不调(已 smali 核验);exist 用 sim_state /
+// network_operator_name / sim_operator_name / device_name 表征网络态。误发运营商码
+// (且默认 000)会让 exist 请求偏离官方端 shape,服务端判 incorrect、检测失准。
 func existDeviceMap(state nativeState) map[string]string {
 	fields := nativeDeviceMapFields(state)
 	return map[string]string{
@@ -545,10 +550,6 @@ func existDeviceMap(state nativeState) map[string]string {
 		"hasinrc":                         fields["hasinrc"],
 		"pid":                             fields["pid"],
 		"rc":                              fields["rc"],
-		"mcc":                             fields["mcc"],
-		"mnc":                             fields["mnc"],
-		"sim_mcc":                         fields["sim_mcc"],
-		"sim_mnc":                         fields["sim_mnc"],
 	}
 }
 
