@@ -114,10 +114,10 @@ func (s *Server) numberProbeProxy(ctx context.Context, payload map[string]any) (
 		return route, "", waProxySummary(route, false), func() {}, nil
 	}
 	gateway := &actionGateway{server: s}
-	if isStaticCommonProxyRoute(route) && gateway.registrationProxyLeaseAccountID(payload, route) == "" {
-		direct := directWAProxyRoute()
-		return direct, "", waProxySummary(direct, false), func() {}, nil
-	}
+	// Registration proxy lease is optional: when configured it upgrades the
+	// common proxy to a dedicated leased route; otherwise the probe rides the
+	// common proxy. acquireRegistrationProxyLease only returns an error in
+	// required mode, so an unavailable lease falls back to the common proxy.
 	lease, leasedRoute, err := gateway.acquireRegistrationProxyLease(ctx, payload, route, numberProbeProxyRouteTTL)
 	if err != nil {
 		return WAProxyRoute{}, "", nil, func() {}, err
@@ -126,9 +126,6 @@ func (s *Server) numberProbeProxy(ctx context.Context, payload map[string]any) (
 	if validRegistrationProxyLease(lease) {
 		route = leasedRoute
 		release = func() { gateway.releaseRegistrationProxyLease(context.Background(), lease) }
-	} else if isStaticCommonProxyRoute(route) {
-		direct := directWAProxyRoute()
-		return direct, "", waProxySummary(direct, false), release, nil
 	}
 	return route, route.ProxyURL, waProxySummary(route, true), release, nil
 }

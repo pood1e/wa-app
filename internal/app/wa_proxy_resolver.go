@@ -117,14 +117,6 @@ func (s *Server) resolveSystemCommonProxyRoute(countryCode string) (WAProxyRoute
 	return route, true
 }
 
-func isStaticCommonProxyRoute(route WAProxyRoute) bool {
-	return route.ProxyMode == waProxyModeCommon || route.RouteID == "static-common-proxy" || route.AccountID == "static-common-proxy"
-}
-
-func directWAProxyRoute() WAProxyRoute {
-	return WAProxyRoute{ProxyMode: waProxyModeDirect, CountryCode: "LOCAL", Source: waProxySourceDirect, PolicyMode: waProxyModeDirect}
-}
-
 func waProxySummary(route WAProxyRoute, useProxy bool) map[string]any {
 	if !useProxy {
 		return map[string]any{"success": true, "accepted": true, "proxy_mode": waProxyModeDirect, "country_code": "LOCAL", "source": waProxySourceDirect}
