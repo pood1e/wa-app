@@ -559,23 +559,36 @@ func parseExistProbeResult(data map[string]any) EngineProbeResult {
 	methodStatuses := verificationMethodStatuses(data, nil)
 	smsWait := verificationSMSCooldownSeconds(data)
 	smsWaitExhausted := verificationSMSWaitExhausted(data)
-	blocked := status == "blocked" || reason == "blocked"
 	baseProtocolRejected := existProtocolRejected(status, reason)
+	blocked := status == "blocked" || reason == "blocked" || existConsentBlockedReason(reason)
 	invalidNumber := existInvalidNumberReason(reason)
 	rateLimited := existRateLimitedReason(reason)
-	registered := !baseProtocolRejected && !blocked && !invalidNumber && !rateLimited && (waOldFallbackEligible(data) || accountTransferFallbackEligible(data) || existRegisteredSignal(status, reason, data))
+	consentRequired := !baseProtocolRejected && !blocked && existConsentReason(reason)
+	challengeRequired := !baseProtocolRejected && !blocked && existChallengeReason(reason)
+	gated := consentRequired || challengeRequired
+	registered := !baseProtocolRejected && !blocked && !invalidNumber && !rateLimited && !gated && (waOldFallbackEligible(data) || accountTransferFallbackEligible(data) || existRegisteredSignal(status, reason, data))
 	if registered {
 		methodStatuses = upsertVerificationMethodStatus(methodStatuses, "acc_tr", verificationWaitStatus{Present: true})
 	}
 	protocolRejected := baseProtocolRejected
-	notRegistered := !baseProtocolRejected && !blocked && !invalidNumber && !rateLimited && !registered && existNotRegisteredReason(reason)
+	notRegistered := !baseProtocolRejected && !blocked && !invalidNumber && !rateLimited && !gated && !registered && existNotRegisteredReason(reason)
 	registeredKnown := registered || invalidNumber || notRegistered
 	canSendSMS := smsProbeAvailableByCooldownOnly(smsWait, smsWaitExhausted, blocked, protocolRejected, invalidNumber, rateLimited)
 	methods := methodsFromStatuses(methodStatuses)
-	reachable := !protocolRejected && !blocked && !invalidNumber && !rateLimited && (existReachableStatus(status) || registered || notRegistered || status != "" || reason != "")
+	reachable := !protocolRejected && !blocked && !invalidNumber && !rateLimited && (existReachableStatus(status) || registered || notRegistered || gated)
+	accountFlow := existAccountFlow(existFlowClass{
+		protocolRejected:  protocolRejected,
+		registered:        registered,
+		notRegistered:     notRegistered,
+		blocked:           blocked,
+		invalidNumber:     invalidNumber,
+		rateLimited:       rateLimited,
+		consentRequired:   consentRequired,
+		challengeRequired: challengeRequired,
+	})
 	result := EngineProbeResult{
 		Status:           waappv1.AccountProbeStatus_ACCOUNT_PROBE_STATUS_UNKNOWN,
-		AccountFlow:      existAccountFlow(protocolRejected, registered, notRegistered, blocked, invalidNumber, rateLimited),
+		AccountFlow:      accountFlow,
 		RawStatus:        status,
 		RawReason:        reason,
 		RegisteredKnown:  registeredKnown,
@@ -680,27 +693,76 @@ func existRegisteredSignal(status string, reason string, data map[string]any) bo
 
 func existRegisteredReason(reason string) bool {
 	switch reason {
-	case "security_code", "second_code", "device_confirm_or_second_code", "consent", "consent_parent_linking_already_registered":
+	case "security_code", "second_code", "device_confirm_or_second_code", "consent_parent_linking_already_registered":
 		return true
 	default:
 		return false
 	}
 }
 
-func existAccountFlow(protocolRejected bool, registered bool, notRegistered bool, blocked bool, invalidNumber bool, rateLimited bool) string {
+// existConsentReason reports reasons where the number is registrable but the
+// same-device check (KotlinRegistrationBridge.parseSameDeviceCheckResponse)
+// requires the consent (age/parental) flow before a code can be requested.
+func existConsentReason(reason string) bool {
+	switch reason {
+	case "consent", "consent_minor", "app_store_age":
+		return true
+	default:
+		return false
+	}
+}
+
+// existConsentBlockedReason reports consent verdicts that hard-block
+// registration: underage, impossible age, parental block, linking ineligible.
+func existConsentBlockedReason(reason string) bool {
+	switch reason {
+	case "consent_underage_block", "consent_impossible_age", "consent_parent_block", "consent_parent_linking_ineligible":
+		return true
+	default:
+		return false
+	}
+}
+
+// existChallengeReason reports reasons that require the challenge flow
+// (email/captcha checkpoint) before registration can proceed.
+func existChallengeReason(reason string) bool {
+	switch reason {
+	case "challenge", "challenge_email_start":
+		return true
+	default:
+		return false
+	}
+}
+
+type existFlowClass struct {
+	protocolRejected  bool
+	registered        bool
+	notRegistered     bool
+	blocked           bool
+	invalidNumber     bool
+	rateLimited       bool
+	consentRequired   bool
+	challengeRequired bool
+}
+
+func existAccountFlow(c existFlowClass) string {
 	switch {
-	case protocolRejected:
+	case c.protocolRejected:
 		return accountProbeFlowProbeFailed
-	case registered:
-		return accountProbeFlowRegistered
-	case notRegistered:
-		return accountProbeFlowNotRegistered
-	case blocked:
+	case c.blocked:
 		return accountProbeFlowBlocked
-	case invalidNumber:
+	case c.invalidNumber:
 		return accountProbeFlowInvalidNumber
-	case rateLimited:
+	case c.rateLimited:
 		return accountProbeFlowRateLimited
+	case c.consentRequired:
+		return accountProbeFlowConsentRequired
+	case c.challengeRequired:
+		return accountProbeFlowChallengeRequired
+	case c.registered:
+		return accountProbeFlowRegistered
+	case c.notRegistered:
+		return accountProbeFlowNotRegistered
 	default:
 		return accountProbeFlowUnknown
 	}

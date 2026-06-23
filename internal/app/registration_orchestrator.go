@@ -42,8 +42,7 @@ func (s *Server) StartRegistration(ctx context.Context, payload map[string]any) 
 	if !registrationProbeAllowsMethod(probeResult, method) {
 		return rejectedRegistrationResult(basePayload, registrationProbeFailureMap(probeResult, route, managedRoute)), nil
 	}
-	codeResult, updatedState := runner.requestVerificationCodeWithState(ctx, EngineRegistrationInput{AppVersion: defaultWAAppVersion, Phone: phone, DeliveryMethod: method, AuthCodeContext: authCodeContext}, state)
-	_ = gateway.saveRegistrationAttemptState(context.Background(), stateRef, updatedState)
+	codeResult, method, updatedState := gateway.requestVerificationCodeWithFallback(ctx, runner, phone, method, authCodeContext, state, stateRef)
 	logRegistrationCodeResult(basePayload, phone, route, method, codeResult)
 	if !verificationCodeRequestAccepted(codeResult) {
 		return rejectedRegistrationResult(basePayload, registrationRequestFailureMap(codeResult, method, route, managedRoute)), nil
@@ -270,8 +269,88 @@ func verificationCodeRequestAccepted(result EngineCodeResult) bool {
 	return result.Err == nil && (result.Status == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_SENT || result.Status == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_WAITING)
 }
 
+var registrationFallbackMethods = map[waappv1.VerificationDeliveryMethod]bool{
+	waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_SMS:       true,
+	waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_VOICE:     true,
+	waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_WA_OLD:    true,
+	waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_SEND_SMS:  true,
+	waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_EMAIL_OTP: true,
+}
+
+// requestVerificationCodeWithFallback drives /v2/code for the requested method
+// and, mirroring the APK registration flow, auto-switches to the next method the
+// server lists in fallback_methods when the current method fails non-terminally
+// (next_method, no_routes, provider timeout, cooldown). It stops on the first
+// accepted request, a terminal rejection, or once no offered method remains.
+func (g *actionGateway) requestVerificationCodeWithFallback(ctx context.Context, runner *NativeEngine, phone *waappv1.PhoneTarget, requested waappv1.VerificationDeliveryMethod, authCodeContext string, state nativeState, stateRef string) (EngineCodeResult, waappv1.VerificationDeliveryMethod, nativeState) {
+	tried := map[waappv1.VerificationDeliveryMethod]bool{}
+	current := requested
+	currentState := state
+	var result EngineCodeResult
+	for {
+		result, currentState = runner.requestVerificationCodeWithState(ctx, EngineRegistrationInput{AppVersion: defaultWAAppVersion, Phone: phone, DeliveryMethod: current, AuthCodeContext: authCodeContext}, currentState)
+		_ = g.saveRegistrationAttemptState(context.Background(), stateRef, currentState)
+		tried[current] = true
+		if verificationCodeRequestAccepted(result) || !codeFailureAllowsFallback(result) {
+			return result, current, currentState
+		}
+		next, ok := nextFallbackMethod(result, tried)
+		if !ok {
+			return result, current, currentState
+		}
+		log.Printf(
+			"wa_registration_method_fallback from=%s to=%s reason=%s",
+			registrationMethodName(current, ""),
+			registrationMethodName(next, ""),
+			probeLogValue(result.RawReason),
+		)
+		current = next
+	}
+}
+
+// codeFailureAllowsFallback reports whether a failed /v2/code response is a
+// non-terminal failure for which the APK would try another delivery method.
+func codeFailureAllowsFallback(result EngineCodeResult) bool {
+	switch strings.ToLower(strings.TrimSpace(result.RawReason)) {
+	case "blocked", "format_wrong", "length_short", "length_long",
+		"bad_param", "missing_param", "bad_token", "old_version", "invalid_skey",
+		"security_code", "second_code", "device_confirm_or_second_code",
+		"consent", "challenge", "challenge_email_start":
+		return false
+	default:
+		return true
+	}
+}
+
+// nextFallbackMethod picks the next untried delivery method the server offers as
+// available (via fallback_methods) in the APK's default method order.
+func nextFallbackMethod(result EngineCodeResult, tried map[waappv1.VerificationDeliveryMethod]bool) (waappv1.VerificationDeliveryMethod, bool) {
+	for _, code := range apkDefaultRegistrationMethodOrder {
+		method := verificationMethod(code)
+		if method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED || tried[method] || !registrationFallbackMethods[method] {
+			continue
+		}
+		if fallbackMethodAvailable(result.MethodStatuses, method) {
+			return method, true
+		}
+	}
+	return waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED, false
+}
+
+func fallbackMethodAvailable(statuses []VerificationMethodStatus, method waappv1.VerificationDeliveryMethod) bool {
+	for _, status := range statuses {
+		if status.Method == method {
+			return status.Available
+		}
+	}
+	return false
+}
+
 func registrationProbeAllowsMethod(result EngineProbeResult, method waappv1.VerificationDeliveryMethod) bool {
-	if result.Err != nil || result.Blocked || result.AccountFlow == accountProbeFlowInvalidNumber {
+	if result.Err != nil || result.Blocked ||
+		result.AccountFlow == accountProbeFlowInvalidNumber ||
+		result.AccountFlow == accountProbeFlowConsentRequired ||
+		result.AccountFlow == accountProbeFlowChallengeRequired {
 		return false
 	}
 	if method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED ||
@@ -403,6 +482,10 @@ func registrationProbeError(result EngineProbeResult) error {
 		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_RATE_LIMITED, "verification request is cooling down", true)
 	case result.Blocked:
 		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, "number is blocked", false)
+	case result.AccountFlow == accountProbeFlowConsentRequired:
+		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, "registration requires consent before a code can be requested", false)
+	case result.AccountFlow == accountProbeFlowChallengeRequired:
+		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, "registration requires challenge verification before a code can be requested", false)
 	case result.Status != waappv1.AccountProbeStatus_ACCOUNT_PROBE_STATUS_REACHABLE:
 		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, "account probe is not reachable", false)
 	default:
@@ -534,6 +617,12 @@ func registrationRejectReason(errorMessage string) string {
 	}
 	if strings.Contains(normalized, "blocked") {
 		return "blocked"
+	}
+	if strings.Contains(normalized, "consent") {
+		return "consent_required"
+	}
+	if strings.Contains(normalized, "challenge") {
+		return "challenge_required"
 	}
 	return "rejected"
 }

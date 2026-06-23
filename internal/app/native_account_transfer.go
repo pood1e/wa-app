@@ -13,7 +13,7 @@ import (
 const (
 	accountTransferMaxCodes            = 6
 	accountTransferRotationIntervalSec = 60
-	accountTransferDeeplinkBase        = "https://wa.me/fpm"
+	accountTransferDeeplinkBase        = "whatsapp-consumer://fpm"
 	accountTransferDeeplinkPort        = "8988"
 	accountTransferDeeplinkVersion     = "3"
 	accountTransferDeeplinkPlatform    = "android"
