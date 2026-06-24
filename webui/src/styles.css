@@ -14,7 +14,7 @@ body,
 }
 
 body {
-  background: #f8fafc;
+  background: var(--background);
 }
 
 @theme inline {

@@ -6,6 +6,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -24,6 +25,7 @@ import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { waAccountID } from './wa-api';
 import { WaAccountAvatar } from './wa-account-avatar';
 import { WaConnectionDot } from './wa-connection-dot';
+import { WaThemeToggle } from './wa-theme-toggle';
 import { waAccountPath, waChatsPath } from './wa-route-paths';
 
 type RailProps = { accounts: WAAccount[]; selectedID: string; avatarVersion: string; connections: Map<string, LongConnectionState>; loading: boolean; connectionsLoading: boolean; hasNextPage: boolean; loadingMore: boolean; onLoadMore: () => void };
@@ -58,6 +60,9 @@ export function WaAccountRail({ accounts, selectedID, avatarVersion, connections
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border p-1">
+        <WaThemeToggle className="size-8 group-data-[collapsible=icon]:mx-auto" />
+      </SidebarFooter>
       <SidebarRail aria-label={expanded ? '收起账号栏' : '展开账号栏'} title={expanded ? '收起账号栏' : '展开账号栏'} />
     </Sidebar>
   );
