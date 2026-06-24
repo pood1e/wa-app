@@ -56,6 +56,37 @@ func accountLoggedOutError(reason string) error {
 	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, reason, false)
 }
 
+// chatdDeviceRemovedMarker 是 device_removed 登出信号在错误消息里的稳定标记,贯穿
+// chatd 错误构造与 long-connection 的 isDeviceRemovedError 识别。
+const chatdDeviceRemovedMarker = "device_removed"
+
+// chatdTerminalNodeDeviceRemoved 判断 chatd 终端控制节点(stream:error/failure/error)是否携带
+// <conflict type="device_removed">:本设备已被服务端移除(号码已在其他设备注册/被接管)。对齐 APK
+// X.1FJ(ErrorStanzaHandler):取 <conflict> 子节点、读 type 属性、等于 "device_removed" 即触发登出。
+func chatdTerminalNodeDeviceRemoved(node chatdNode) bool {
+	if chatdNodeIsDeviceRemovedConflict(node) {
+		return true
+	}
+	if children, ok := node.Content.([]chatdNode); ok {
+		for _, child := range children {
+			if chatdNodeIsDeviceRemovedConflict(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func chatdNodeIsDeviceRemovedConflict(node chatdNode) bool {
+	return node.Tag == "conflict" && strings.TrimSpace(node.Attrs["type"]) == chatdDeviceRemovedMarker
+}
+
+// deviceRemovedError 构造 device_removed 登出错误:非可重试 CONFLICT,消息以 device_removed 标记开头,
+// 供 chatdReceiveError 透传后由 isDeviceRemovedError 识别。
+func deviceRemovedError(summary string) error {
+	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, chatdDeviceRemovedMarker+": "+summary, false)
+}
+
 func accountLoggedOutMessage(l *chatdDeviceLogout) string {
 	if l != nil && l.newDevicePlatform != "" {
 		return "account registered on another device (" + l.newDevicePlatform + ")"

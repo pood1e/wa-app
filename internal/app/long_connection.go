@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -22,11 +21,6 @@ const (
 	longConnectionDecryptLimit         = 100
 	staleMessageSessionTTL             = 10 * time.Minute
 	staleMessageSessionCleanupInterval = 5 * time.Minute
-	// longConnectionColdRejectLimit 是"持续登录被拒"的阈值:chatd 连续这么多次在登录/收包
-	// 阶段被服务端控制节点(failure/stream:error/conflict)拒绝、且其间从未拿到一次心跳时,
-	// 判定账号已在其他设备注册(转出/被接管),持久化为 REVOKED 并停连。瞬时故障会在阈值内
-	// 连上并清零计数,不会误判。
-	longConnectionColdRejectLimit = 5
 )
 
 type LongConnectionManager struct {
@@ -289,7 +283,6 @@ func (m *LongConnectionManager) closeStaleMessageSessions(ctx context.Context) {
 func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv1.LoginState, key string) {
 	backoff := longConnectionInitialBackoff
 	reconnects := int32(0)
-	coldRejects := int32(0)
 	defer m.markStopped(key)
 	for ctx.Err() == nil {
 		m.update(key, func(snapshot *waappv1.LongConnectionState) {
@@ -308,7 +301,8 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 				return
 			}
 			m.recordLoopError(key, reconnects, err)
-			if longConnectionTerminalError(err) {
+			if longConnectionTerminalError(err) || isDeviceRemovedError(err) {
+				m.persistIfDeviceRemoved(ctx, loginState, err)
 				return
 			}
 			if !sleepContext(ctx, backoff) {
@@ -330,7 +324,8 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 			}
 			m.recordLoopError(key, reconnects, err)
 			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection runner unavailable"})
-			if longConnectionTerminalError(err) {
+			if longConnectionTerminalError(err) || isDeviceRemovedError(err) {
+				m.persistIfDeviceRemoved(ctx, loginState, err)
 				return
 			}
 			if !sleepContext(ctx, backoff) {
@@ -353,14 +348,14 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 				}
 				lastErr = err
 				m.recordLoopError(key, reconnects, err)
-				terminal = longConnectionTerminalError(err)
+				terminal = longConnectionTerminalError(err) || isDeviceRemovedError(err)
 				break
 			}
 			if resp.GetError() != nil {
 				respErr := errorFromProto(resp.GetError())
 				lastErr = respErr
 				m.recordLoopError(key, reconnects, respErr)
-				terminal = longConnectionTerminalError(respErr)
+				terminal = longConnectionTerminalError(respErr) || isDeviceRemovedError(respErr)
 				break
 			}
 			now := m.server.clock.Now()
@@ -391,17 +386,8 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 		closeLongConnectionRunner(runner)
 		if terminal {
 			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection account terminal"})
+			m.persistIfDeviceRemoved(ctx, loginState, lastErr)
 			return
-		}
-		if receivedHeartbeat {
-			coldRejects = 0
-		} else if isChatdLoginRejection(lastErr) {
-			coldRejects++
-			if coldRejects >= longConnectionColdRejectLimit {
-				_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection account transferred out"})
-				m.server.markLoginTransferredOut(context.WithoutCancel(ctx), loginState, accountTakeoverError(coldRejects, lastErr))
-				return
-			}
 		}
 		if !receivedHeartbeat {
 			backoff = nextBackoff(backoff)
@@ -439,27 +425,25 @@ func longConnectionTerminalError(err error) bool {
 	}
 }
 
-// isChatdLoginRejection 判断错误是否为 chatd 服务端在登录/收包阶段下发的控制节点拒绝
-// (failure/stream:error/error,即号码被接管或本端登录态失效),据此区别于网络层瞬时错误。
-// 标记来自 chatd 终端节点统一的 "server sent …" / "server closed xml stream" 消息。
-func isChatdLoginRejection(err error) bool {
+// isDeviceRemovedError 判断错误是否为 chatd 下发的 device_removed 登出信号:服务端在
+// <stream:error>/<failure> 里带 <conflict type="device_removed">,表示本设备已被移除(号码已
+// 在其他设备注册/被接管)。对齐 APK ErrorStanzaHandler(X.1FJ)对该信号触发 deregister 的判定。
+// 经 chatdReceiveError 保留为非可重试 CONFLICT,消息含 device_removed 标记,区别于 generic failure。
+func isDeviceRemovedError(err error) bool {
 	if err == nil {
 		return false
 	}
-	message := ToProtoError(err).GetMessage()
-	return strings.Contains(message, "server sent ") || strings.Contains(message, "server closed xml stream")
+	protoErr := ToProtoError(err)
+	return protoErr.GetCode() == waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT &&
+		strings.Contains(protoErr.GetMessage(), chatdDeviceRemovedMarker)
 }
 
-// accountTakeoverError 构造"账号已在其他设备注册(转出/被接管)"的非可重试 CONFLICT 错误,
-// 附带连续被拒次数与最后一次 chatd 拒绝摘要,便于仪表盘与日志诊断。
-func accountTakeoverError(attempts int32, lastErr error) error {
-	message := fmt.Sprintf("account login rejected on %d consecutive attempts without connecting; treating as registered on another device", attempts)
-	if lastErr != nil {
-		if detail := ToProtoError(lastErr).GetMessage(); detail != "" {
-			message += " (" + detail + ")"
-		}
+// persistIfDeviceRemoved 在长连接因 device_removed 终止时把登录态持久化为 REVOKED 并停连,
+// 复用 device_logout 的"已转出"终态语义(重启后 restore 只拉 ACTIVE,不再被拉起)。
+func (m *LongConnectionManager) persistIfDeviceRemoved(ctx context.Context, loginState *waappv1.LoginState, err error) {
+	if isDeviceRemovedError(err) {
+		m.server.markLoginTransferredOut(context.WithoutCancel(ctx), loginState, err)
 	}
-	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, message, false)
 }
 
 func (m *LongConnectionManager) openSession(ctx context.Context, loginState *waappv1.LoginState) (*waappv1.MessageSession, error) {

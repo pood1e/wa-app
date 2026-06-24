@@ -302,7 +302,11 @@ func (s *chatdSession) consumeIncomingNode(input EngineMessageInput, node chatdN
 		return update, nil, newChatdError("server closed xml stream")
 	}
 	if isChatdTerminalNode(node) {
-		return update, nil, newChatdError("server sent %s", controlNodeSummary(node))
+		summary := controlNodeSummary(node)
+		if chatdTerminalNodeDeviceRemoved(node) {
+			return update, nil, deviceRemovedError(summary)
+		}
+		return update, nil, newChatdError("server sent %s", summary)
 	}
 	oldRegistrationOTP, isOldRegistrationNode, oldRegistrationValid := oldRegistrationOTPFromChatdNode(node, s.deviceID, now)
 	ackAttrs := map[string]string(nil)
