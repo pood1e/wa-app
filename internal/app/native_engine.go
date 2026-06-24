@@ -437,7 +437,7 @@ func (e *NativeEngine) ReceiveMessageBatch(ctx context.Context, input EngineMess
 	if applyChatdReceiveState(&state, input, payloads, update) {
 		_ = e.saveState(ctx, input.ClientProfileID, state)
 	}
-	return EngineMessageBatchResult{Messages: messages, Contacts: contactsFromContactHints(input.WAAccountID, nil, update.ContactHints, now), OTPMessages: otps}
+	return EngineMessageBatchResult{Messages: messages, Contacts: contactsFromContactHints(input.WAAccountID, nil, update.ContactHints, now), OTPMessages: otps, AccountLogout: accountLogoutFromUpdate(update.AccountLogout)}
 }
 
 func applyChatdReceiveState(state *nativeState, input EngineMessageInput, payloads []chatdEncPayload, update chatdSessionUpdate) bool {
@@ -499,11 +499,14 @@ func mergeChatdSessionUpdate(current chatdSessionUpdate, next chatdSessionUpdate
 	if len(next.PrivacyTokens) > 0 {
 		current.PrivacyTokens = dedupePrivacyTokenUpdates(append(current.PrivacyTokens, next.PrivacyTokens...))
 	}
+	if next.AccountLogout != nil {
+		current.AccountLogout = next.AccountLogout
+	}
 	return current
 }
 
 func hasChatdSessionUpdate(update chatdSessionUpdate) bool {
-	return update.RoutingInfo != "" || update.Endpoint.Host != "" || update.ServerStaticPublic != "" || len(update.ContactHints) > 0 || len(update.PrivacyTokens) > 0
+	return update.RoutingInfo != "" || update.Endpoint.Host != "" || update.ServerStaticPublic != "" || len(update.ContactHints) > 0 || len(update.PrivacyTokens) > 0 || update.AccountLogout != nil
 }
 
 func applyChatdConnectionState(state *nativeState, update chatdSessionUpdate) bool {

@@ -125,7 +125,7 @@ func (e *longConnectionNativeEngine) ReceiveMessageBatch(ctx context.Context, in
 			}
 		}
 	}
-	return EngineMessageBatchResult{Messages: messages, Contacts: contactsFromContactHints(input.WAAccountID, nil, update.ContactHints, now), OTPMessages: otps}
+	return EngineMessageBatchResult{Messages: messages, Contacts: contactsFromContactHints(input.WAAccountID, nil, update.ContactHints, now), OTPMessages: otps, AccountLogout: accountLogoutFromUpdate(update.AccountLogout)}
 }
 
 func (e *longConnectionNativeEngine) ResolveContactProfilePicture(ctx context.Context, input EngineContactProfilePictureInput) EngineContactProfilePictureResult {
@@ -226,7 +226,7 @@ func (e *longConnectionNativeEngine) drainPendingLocked(input EngineMessageInput
 }
 
 func (e *longConnectionNativeEngine) bufferPendingLocked(items []chatdReceivedItem, update chatdSessionUpdate) {
-	if len(items) == 0 && len(update.ContactHints) == 0 {
+	if len(items) == 0 && len(update.ContactHints) == 0 && update.AccountLogout == nil {
 		return
 	}
 	e.pending = append(e.pending, items...)

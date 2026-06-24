@@ -295,10 +295,19 @@ type EngineTextMessageResult struct {
 }
 
 type EngineMessageBatchResult struct {
-	Messages    []*waappv1.InboundMessage
-	Contacts    []*waappv1.WAContact
-	OTPMessages []*waappv1.OtpMessage
-	Err         error
+	Messages      []*waappv1.InboundMessage
+	Contacts      []*waappv1.WAContact
+	OTPMessages   []*waappv1.OtpMessage
+	AccountLogout *EngineAccountLogout
+	Err           error
+}
+
+// EngineAccountLogout 表示该账号已被服务端登出(号码在其他设备注册/被接管),
+// 调用方据此把登录态置为 REVOKED 并停止长连接。
+type EngineAccountLogout struct {
+	Reason              string
+	NewDevicePlatform   string
+	NewDeviceAppVersion string
 }
 
 type EngineDecryptResult struct {

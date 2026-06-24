@@ -36,6 +36,7 @@ type longConnectionEntry struct {
 	cancel   context.CancelFunc
 	runner   ProtocolEngine
 	snapshot *waappv1.LongConnectionState
+	revoked  bool
 }
 
 type longConnectionStopItem struct {
@@ -404,10 +405,37 @@ func (m *LongConnectionManager) update(key string, mutate func(*waappv1.LongConn
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	entry := m.entries[key]
-	if entry == nil || entry.snapshot == nil {
+	if entry == nil || entry.snapshot == nil || entry.revoked {
 		return
 	}
 	mutate(entry.snapshot)
+}
+
+// Revoke 在账号被服务端登出(号码已在其他设备注册/被接管)时调用:把快照置为终态
+// STOPPED 并附作废原因,然后取消该 entry,使长连接停止且不再重连。restore 只拉取
+// ACTIVE 登录态,作废后的账号不会被重新拉起。
+func (m *LongConnectionManager) Revoke(registeredIdentityID string, cause error) {
+	if m == nil || strings.TrimSpace(registeredIdentityID) == "" {
+		return
+	}
+	m.mu.Lock()
+	entry := m.entries[registeredIdentityID]
+	if entry == nil || entry.revoked {
+		m.mu.Unlock()
+		return
+	}
+	entry.revoked = true
+	cancel := entry.cancel
+	entry.cancel = nil
+	if entry.snapshot != nil {
+		entry.snapshot.Status = waappv1.LongConnectionStatus_LONG_CONNECTION_STATUS_STOPPED
+		entry.snapshot.LastError = ToProtoError(cause)
+	}
+	m.mu.Unlock()
+	log.Printf("WA long connection revoked: registered_identity=%s reason=%s", registeredIdentityID, longConnectionLogErrorMessage(ToProtoError(cause).GetMessage()))
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (m *LongConnectionManager) markStopped(key string) {
@@ -454,6 +482,12 @@ func (m *LongConnectionManager) stopAll() {
 func (s *Server) ensureLongConnection(ctx context.Context, loginState *waappv1.LoginState) {
 	if s != nil && s.longConnections != nil {
 		s.longConnections.Ensure(ctx, loginState)
+	}
+}
+
+func (s *Server) revokeLongConnection(registeredIdentityID string, cause error) {
+	if s != nil && s.longConnections != nil {
+		s.longConnections.Revoke(registeredIdentityID, cause)
 	}
 }
 

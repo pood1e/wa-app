@@ -65,6 +65,7 @@ type chatdSessionUpdate struct {
 	ServerStaticPublic string
 	ContactHints       []waContactHint
 	PrivacyTokens      []nativePrivacyTokenUpdate
+	AccountLogout      *chatdDeviceLogout
 }
 
 type chatdReceivedItem struct {
@@ -318,6 +319,9 @@ func (s *chatdSession) consumeIncomingNode(input EngineMessageInput, node chatdN
 	}
 	update.ContactHints = dedupeWAContactHints(append(update.ContactHints, contactHintsFromChatdNode(node)...))
 	update.PrivacyTokens = dedupePrivacyTokenUpdates(append(update.PrivacyTokens, privacyTokenUpdatesFromChatdNode(node)...))
+	if logout, ok := deviceLogoutFromChatdNode(node); ok {
+		update.AccountLogout = &logout
+	}
 	items := []chatdReceivedItem{}
 	if oldRegistrationValid {
 		if otp := oldRegistrationOTPMessage(input, node, oldRegistrationOTP, now); otp != nil {

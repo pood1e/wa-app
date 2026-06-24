@@ -91,19 +91,33 @@ func (s *Server) receiveMessageBatch(ctx context.Context, req *waappv1.ReceiveMe
 	}
 	now := s.clock.Now()
 	session.LastSeenAt = timestamppb.New(now)
-	_ = s.runtime.OpenSessionLease(ctx, session.GetMessageSessionId(), 5*time.Minute)
+	loggedOut := result.AccountLogout
+	if loggedOut != nil {
+		session.Status = waappv1.MessageSessionStatus_MESSAGE_SESSION_STATUS_CLOSED
+		session.LastError = ToProtoError(accountLoggedOutError(loggedOut.Reason))
+	} else {
+		_ = s.runtime.OpenSessionLease(ctx, session.GetMessageSessionId(), 5*time.Minute)
+	}
 	if loginState, err := s.store.GetLoginStateByRegisteredIdentity(ctx, session.GetRegisteredIdentityId()); err == nil && loginState.GetWaAccountId() == session.GetWaAccountId() && loginState.GetClientProfileId() == session.GetClientProfileId() {
 		if loginState.Audit == nil {
 			loginState.Audit = &waappv1.AuditStamp{CreatedAt: timestamppb.New(now)}
 		}
-		loginState.Status = waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE
-		loginState.LastVerifiedAt = timestamppb.New(now)
-		loginState.LastError = nil
+		if loggedOut != nil {
+			loginState.Status = waappv1.LoginStateStatus_LOGIN_STATE_STATUS_REVOKED
+			loginState.LastError = ToProtoError(accountLoggedOutError(loggedOut.Reason))
+		} else {
+			loginState.Status = waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE
+			loginState.LastVerifiedAt = timestamppb.New(now)
+			loginState.LastError = nil
+		}
 		loginState.Audit.UpdatedAt = timestamppb.New(now)
 		_ = s.store.SaveLoginState(ctx, loginState, "native-db:"+session.GetClientProfileId())
 	}
 	if err := s.store.SaveMessageSession(ctx, session); err != nil {
 		return &waappv1.ReceiveMessageBatchResponse{Session: session, Error: ToProtoError(err)}, nil
+	}
+	if loggedOut != nil {
+		s.revokeLongConnection(session.GetRegisteredIdentityId(), accountLoggedOutError(loggedOut.Reason))
 	}
 	return &waappv1.ReceiveMessageBatchResponse{Messages: result.Messages, Session: session}, nil
 }
