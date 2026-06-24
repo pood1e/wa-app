@@ -528,11 +528,24 @@ func sendChatdIQWithContext(ctx context.Context, session *chatdSession, input En
 	return session.sendIQ(ctx, input, request, timeout, timeoutMessage)
 }
 
+// closeChatdSessionOnContext 用于长连接的接收循环与交互式 IQ —— 二者共享同一条 conn。
+// ctx 取消(IQ 抢占接收读、或 IQ 自身超时/取消)时,只用读截止时间打断阻塞读,让
+// receiveBatch/sendIQ 优雅返回,绝不 Close() 这条共享连接;否则一次账号设置同步(2FA)
+// 就会把长连接整条关掉,触发重连掉线。真正的关闭只在 runEntry 拆链时经 Close() 完成。
 func closeChatdSessionOnContext(ctx context.Context, session *chatdSession) func() {
-	if session == nil {
+	if ctx == nil || session == nil || session.conn == nil {
 		return func() {}
 	}
-	return closeChatdConnOnContext(ctx, session.conn)
+	conn := session.conn
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.SetReadDeadline(time.Now())
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
 }
 
 var _ ProtocolEngine = (*longConnectionNativeEngine)(nil)

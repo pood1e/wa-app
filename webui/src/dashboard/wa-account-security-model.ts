@@ -20,31 +20,37 @@ export function shouldShowEmailOtp(status?: AccountSettingsOperationStatus) {
     || status === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_CODE_MISMATCH;
 }
 
+// 远程同步失败时,优先展示已缓存的最近状态,而不是把它盖成刺眼的「同步失败」。
+// 同步失败本身由面板上的软提示(toast/角标)单独表达,避免误导。
 export function twoFactorStatusLabel(query: TwoFactorStatusView) {
   if (query.isFetching) return '同步中';
+  if (query.data?.status) return query.data.status.configured ? '已配置' : '未配置';
   if (query.isError) return '同步失败';
-  if (!query.data?.status) return '未同步';
-  return query.data.status.configured ? '已配置' : '未配置';
+  return '未同步';
 }
 
 export function emailStatusLabel(query: TwoFactorStatusView) {
   if (query.isFetching) return '同步中';
+  if (query.data?.status) {
+    if (query.data.status.email_verified) return '已验证';
+    if (query.data.status.email_address) return '待验证';
+    return query.data.status.email_configured ? '已配置' : '未配置';
+  }
   if (query.isError) return '同步失败';
-  if (!query.data?.status) return '未同步';
-  if (query.data.status.email_verified) return '已验证';
-  if (query.data.status.email_address) return '待验证';
-  return query.data.status.email_configured ? '已配置' : '未配置';
+  return '未同步';
 }
 
 export function twoFactorBadgeVariant(query: TwoFactorStatusView): BadgeVariant {
-  if (query.isError) return 'destructive';
-  return query.data?.status?.configured ? 'default' : 'outline';
+  if (query.data?.status) return query.data.status.configured ? 'default' : 'outline';
+  return query.isError ? 'destructive' : 'outline';
 }
 
 export function emailBadgeVariant(query: TwoFactorStatusView): BadgeVariant {
-  if (query.isError) return 'destructive';
-  if (query.data?.status?.email_verified) return 'default';
-  return query.data?.status?.email_address || query.data?.status?.email_configured ? 'secondary' : 'outline';
+  if (query.data?.status) {
+    if (query.data.status.email_verified) return 'default';
+    return query.data.status.email_address || query.data.status.email_configured ? 'secondary' : 'outline';
+  }
+  return query.isError ? 'destructive' : 'outline';
 }
 
 export function twoFactorConfigured(query: TwoFactorStatusView) {

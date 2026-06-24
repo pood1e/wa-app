@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRightLeft, PhoneForwarded } from 'lucide-react';
+import { PhoneForwarded } from 'lucide-react';
 import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -22,13 +22,8 @@ export function WaAccountChangeNumberCard({ account, busy, onError }: Props) {
     return onError('换绑手机号链路尚未接入：需要按 APK ChangeNumber/ChangeNumberOverview 链路补齐后端实现');
   }
   return (
-    <section className="grid gap-3 border-t border-border pt-5 lg:col-span-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid gap-1">
-          <div className="inline-flex items-center gap-2 text-sm font-medium"><ArrowRightLeft size={15} />账号迁移 / 换绑手机号</div>
-          <div className="text-xs text-muted-foreground">对应已登录账号安全设置里的 Change number，不是注册侧旧设备验证。</div>
-        </div>
-      </div>
+    <div className="grid gap-3">
+      <div className="text-xs text-muted-foreground">对应已登录账号安全设置里的 Change number，不是注册侧旧设备验证。</div>
       <FieldGroup>
         <Field>
           <FieldLabel>当前手机号</FieldLabel>
@@ -44,6 +39,6 @@ export function WaAccountChangeNumberCard({ account, busy, onError }: Props) {
         </Field>
         <Button type="button" disabled={busy} onClick={startChangeNumber}><PhoneForwarded size={14} />发起换绑</Button>
       </FieldGroup>
-    </section>
+    </div>
   );
 }
