@@ -17,10 +17,10 @@ export function WaChatThread({ contact, events, loading, sending, error, onSendM
   return (
     <section className="grid min-h-0 grid-rows-[auto_1fr_auto] overflow-hidden bg-card">
       <ChatHeader contact={contact} loading={loading} />
-      <div className="h-full min-h-0">
+      <div className="chat-doodle-surface h-full min-h-0">
         <AssistantRuntimeProvider runtime={runtime}>
           <ThreadPrimitive.Root className="h-full min-h-0">
-            <ThreadPrimitive.Viewport autoScroll className="h-full min-h-0 space-y-3 overflow-y-auto bg-[#f6f8fb] p-5">
+            <ThreadPrimitive.Viewport autoScroll className="h-full min-h-0 space-y-3 overflow-y-auto p-5">
               <ThreadPrimitive.Empty><EmptyConversation title={title} /></ThreadPrimitive.Empty>
               <ThreadPrimitive.Messages>{() => <BubbleMessage />}</ThreadPrimitive.Messages>
             </ThreadPrimitive.Viewport>

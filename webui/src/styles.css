@@ -51,6 +51,7 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-chat-background: var(--chat-background);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -63,6 +64,9 @@ body {
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* 聊天背景基色 + doodle 着色,对齐 WhatsApp APK default_wallpaper_themed 亮色主题 */
+  --chat-background: #fcede3;
+  --chat-doodle: #edd4c5;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -98,6 +102,9 @@ body {
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+  /* 聊天背景基色 + doodle 着色,对齐 WhatsApp APK default_wallpaper_themed 暗色主题 */
+  --chat-background: #0a0a0a;
+  --chat-doodle: #191310;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
@@ -127,6 +134,24 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* 会话面:纯色基底 + doodle 蒙版(着 --chat-doodle),复刻 APK 壁纸 layer-list 叠层。
+   doodle 在 z-index:-1,固定于消息层之下且不随滚动移动。 */
+.chat-doodle-surface {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--chat-background);
+}
+.chat-doodle-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--chat-doodle);
+  -webkit-mask: url('./assets/chat-doodle.svg') repeat 0 0 / 360px 360px;
+  mask: url('./assets/chat-doodle.svg') repeat 0 0 / 360px 360px;
+  pointer-events: none;
 }
 
 @layer base {

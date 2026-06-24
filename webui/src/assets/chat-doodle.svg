@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 原创通用 doodle 纹理,仅作 CSS mask 取 alpha,着色由 --chat-doodle 提供。
+     非 WhatsApp 专有美术资产;如需 WA 原版 doodle 自行替换本文件。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
+  <g fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="48" cy="40" r="11"/>
+    <path d="M96 30 l18 0 M105 21 l0 18"/>
+    <path d="M150 52 q12 -16 24 0"/>
+    <path d="M210 34 l14 14 M224 34 l-14 14"/>
+    <circle cx="276" cy="46" r="7"/>
+    <path d="M312 30 q10 10 0 20 q-10 -10 0 -20 z"/>
+    <path d="M30 110 q14 -10 28 0 q-14 10 -28 0 z"/>
+    <path d="M88 96 l0 22 M82 102 l12 0"/>
+    <circle cx="146" cy="112" r="9"/>
+    <path d="M196 100 c10 0 10 16 20 16"/>
+    <path d="M250 98 l16 0 l-8 16 z"/>
+    <circle cx="316" cy="116" r="6"/>
+    <path d="M44 176 q12 -14 24 0"/>
+    <path d="M104 168 l16 16 M120 168 l-16 16"/>
+    <circle cx="172" cy="180" r="12"/>
+    <path d="M226 170 l0 20 M218 180 l16 0"/>
+    <path d="M284 168 q14 8 0 20 q-14 -12 0 -20 z"/>
+    <circle cx="40" cy="246" r="8"/>
+    <path d="M92 238 c0 12 18 12 18 0"/>
+    <path d="M150 236 l18 0 l-9 18 z"/>
+    <path d="M212 248 q12 -16 24 0"/>
+    <circle cx="288" cy="244" r="10"/>
+    <path d="M330 236 l0 20 M324 246 l12 0"/>
+    <path d="M52 312 l16 14 M68 312 l-16 14"/>
+    <circle cx="120" cy="318" r="7"/>
+    <path d="M170 308 q14 -10 28 0 q-14 10 -28 0 z"/>
+    <path d="M236 306 l0 22 M230 312 l12 0"/>
+    <circle cx="300" cy="316" r="9"/>
+  </g>
+</svg>
