@@ -60,13 +60,14 @@ func accountLoggedOutError(reason string) error {
 // 与 long-connection 的 isAccountTakeoverError 识别。
 const chatdAccountTakeoverMarker = "account_takeover"
 
-// chatdAccountTakeoverConflictTypes 是 chatd <conflict type=…> 中表示"本设备已被接管/登出"的取值。
-// 只收 device_removed:设备被服务端移除,对齐 APK X.1FJ ErrorStanzaHandler 唯一触发 deregister 的判定。
-// 刻意【不含】replaced:replaced(会话被顶替)并非可靠的转出信号——wa-app 自身重连/并发连接造成的
-// "自我顶替"同样会触发 replaced,据此判转出会把在线账号误判为已转出(实测误报)。官方对 replaced
-// 同样只重连、不登出。
+// chatdAccountTakeoverConflictTypes 是 chatd <conflict type=…> 中表示"本设备已被接管/登出"的取值:
+//   - device_removed:设备被服务端移除(号码已在其他设备注册),对齐 APK X.1FJ ErrorStanzaHandler 触发 deregister 的判定;
+//   - replaced:本设备会话被另一设备顶替。在「每账号一条 chatd」收敛后(收消息/账号设置/头像/usync 全部
+//     复用同一条长连接,不再另开并发 ACTIVE 连接),replaced 不再来自 wa-app 自身的"自我顶替",成为可靠的
+//     转出/接管信号。
 var chatdAccountTakeoverConflictTypes = map[string]struct{}{
 	"device_removed": {},
+	"replaced":       {},
 }
 
 // chatdTerminalNodeAccountTakeover 判断 chatd 终端控制节点(stream:error/failure/error)是否携带
