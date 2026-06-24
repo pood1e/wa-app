@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	nativeGPIAErrorCode    = -2
 	nativeGPIAPackageName  = "com.whatsapp"
 	nativeGPIASourceSize   = "141896808"
 	nativeGPIASourceDigest = "Osq4rcTiHZAOGoPRfEuPX9fBX5w+IanRQ3Rczay4yHE="
@@ -24,6 +23,22 @@ const (
 	nativeGPIANativeLibDigest  = "KMr1FDZ5Qv9UsYvUwaPmFmshuABXLq3rfxeELvAebKk="
 	nativeGPIADataSODigest     = "/2slt0vplE6OE7wMz/C41mG1HvIdraHa5P/RB1MWGW0="
 )
+
+// nativeGPIAErrorCodePool 是 GPIA 错误材料 code/_ic 可轮换的 Play Integrity 错误码,均为"设备本就
+// 做不了 Integrity"的稳定设备态(对照 APK com.google.android.play.core.integrity.model):
+//   -2 PLAY_STORE_NOT_FOUND / -6 PLAY_SERVICES_NOT_FOUND / -1 API_NOT_AVAILABLE /
+//   -4 PLAY_STORE_ACCOUNT_NOT_FOUND。
+// 刻意只收稳定态:瞬时码(-3/-12/-18 等)隐含"重试该成功",作每账号持久值不自洽;
+// 篡改/限流/配置错误码(-7/-8/-10/-11/-13/-16/-17/-19)不可用。每账号按稳定种子确定性选一个,
+// 与设备指纹一样在注册期固定,呈现"这台无 GMS 设备"的一致画像。
+var nativeGPIAErrorCodePool = []int{-2, -6, -1, -4}
+
+// nativeGPIAErrorCode 按账号稳定种子从池中确定性选取错误码:同账号每次构造一致,跨账号分散。
+func nativeGPIAErrorCode(state nativeState) int {
+	pool := nativeGPIAErrorCodePool
+	sum := sha256.Sum256([]byte(nativeStableRuntimeSeed(state, "gpia-error-code")))
+	return pool[int(sum[0])%len(pool)]
+}
 
 type nativeGPIAMaterial struct {
 	Primary       string
@@ -39,10 +54,11 @@ type nativeGPIAJSONField struct {
 func buildNativeGPIAErrorMaterial(input wamsysMaterialInput) (nativeGPIAMaterial, error) {
 	sourceDir := nativeGPIASourceDir(input)
 	keySource := nativeGPIAKeySource(input.State)
+	errorCode := nativeGPIAErrorCode(input.State)
 	primaryFields := []nativeGPIAJSONField{
 		{Key: "sizeInBytes", Value: nativeGPIASourceSize},
 		{Key: "packageName", Value: nativeGPIAPackageName},
-		{Key: "code", Value: nativeGPIAErrorCode},
+		{Key: "code", Value: errorCode},
 		{Key: "shatr", Value: nativeGPIASourceDigest},
 		{Key: "p", Value: sourceDir},
 		{Key: "cert", Value: nativeGPIACertDigest},
@@ -54,7 +70,7 @@ func buildNativeGPIAErrorMaterial(input wamsysMaterialInput) (nativeGPIAMaterial
 		return nativeGPIAMaterial{}, err
 	}
 	codeCompactFields := []nativeGPIAJSONField{
-		{Key: "_ic", Value: nativeGPIAErrorCode},
+		{Key: "_ic", Value: errorCode},
 	}
 	logNativeGPIAPlaintextShape(input, "token_compact", keySource, codeCompactFields)
 	codeCompact, err := encryptNativeGPIAJSON(keySource, codeCompactFields)
