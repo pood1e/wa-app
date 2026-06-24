@@ -301,6 +301,9 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 				return
 			}
 			m.recordLoopError(key, reconnects, err)
+			if longConnectionTerminalError(err) {
+				return
+			}
 			if !sleepContext(ctx, backoff) {
 				return
 			}
@@ -320,6 +323,9 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 			}
 			m.recordLoopError(key, reconnects, err)
 			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection runner unavailable"})
+			if longConnectionTerminalError(err) {
+				return
+			}
 			if !sleepContext(ctx, backoff) {
 				return
 			}
@@ -330,6 +336,7 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 		m.setRunner(key, runner)
 		m.decryptPendingMessages(connectionCtx, session, runner)
 		receivedHeartbeat := false
+		terminal := false
 		for connectionCtx.Err() == nil {
 			resp, err := m.server.receiveMessageBatch(connectionCtx, &waappv1.ReceiveMessageBatchRequest{Context: &waappv1.RequestContext{RequestId: m.server.ids.NewID("wa-rx_"), CorrelationId: loginState.GetLoginStateId()}, MessageSessionId: session.GetMessageSessionId(), MaxMessages: 10, WaitTimeout: durationpb.New(longConnectionWaitTimeout)}, runner)
 			if err != nil {
@@ -337,10 +344,13 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 					break
 				}
 				m.recordLoopError(key, reconnects, err)
+				terminal = longConnectionTerminalError(err)
 				break
 			}
 			if resp.GetError() != nil {
-				m.recordLoopError(key, reconnects, errorFromProto(resp.GetError()))
+				respErr := errorFromProto(resp.GetError())
+				m.recordLoopError(key, reconnects, respErr)
+				terminal = longConnectionTerminalError(respErr)
 				break
 			}
 			now := m.server.clock.Now()
@@ -369,6 +379,10 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 		}
 		m.clearRunner(key)
 		closeLongConnectionRunner(runner)
+		if terminal {
+			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection account terminal"})
+			return
+		}
 		if !receivedHeartbeat {
 			backoff = nextBackoff(backoff)
 		}
@@ -383,6 +397,25 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 func closeLongConnectionRunner(runner ProtocolEngine) {
 	if closer, ok := runner.(interface{ Close() error }); ok {
 		_ = closer.Close()
+	}
+}
+
+// longConnectionTerminalError 判断错误是否为"账号/资料已不存在"的不可重试终态。
+// 命中时长连接应停止重连(否则像已删除账号那样无限重连泄漏)。
+func longConnectionTerminalError(err error) bool {
+	if err == nil {
+		return false
+	}
+	protoErr := ToProtoError(err)
+	if protoErr.GetRetryable() {
+		return false
+	}
+	switch protoErr.GetCode() {
+	case waappv1.WaErrorCode_WA_ERROR_CODE_WA_ACCOUNT_NOT_FOUND,
+		waappv1.WaErrorCode_WA_ERROR_CODE_PROFILE_NOT_FOUND:
+		return true
+	default:
+		return false
 	}
 }
 

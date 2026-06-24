@@ -943,20 +943,29 @@ func isChatdTerminalNode(node chatdNode) bool {
 }
 
 func controlNodeSummary(node chatdNode) string {
-	parts := []string{node.Tag}
-	for _, key := range []string{"type", "code", "class", "xmlns"} {
-		if value := strings.TrimSpace(node.Attrs[key]); value != "" {
-			parts = append(parts, key+"="+value)
-		}
-	}
+	parts := append([]string{node.Tag}, controlNodeAttrSummary(node.Attrs)...)
 	if children, ok := node.Content.([]chatdNode); ok && len(children) > 0 {
-		tags := make([]string, 0, len(children))
 		for _, child := range children {
-			tags = append(tags, child.Tag)
+			childParts := append([]string{child.Tag}, controlNodeAttrSummary(child.Attrs)...)
+			parts = append(parts, "<"+strings.Join(childParts, " ")+">")
 		}
-		parts = append(parts, "children="+strings.Join(tags, ","))
 	}
 	return strings.Join(parts, " ")
+}
+
+// controlNodeAttrSummary 取 failure/stream:error 等控制节点里安全的诊断属性(reason 码等),
+// 刻意排除 from/to/id 等可能含 JID/手机号的字段,长值截断。
+func controlNodeAttrSummary(attrs map[string]string) []string {
+	out := make([]string, 0, len(attrs))
+	for _, key := range []string{"type", "code", "class", "reason", "text", "location", "xmlns", "t", "expire", "kind", "stat"} {
+		if value := strings.TrimSpace(attrs[key]); value != "" {
+			if len(value) > 48 {
+				value = value[:48] + "…"
+			}
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
 }
 
 func payloadRefForEnc(accountID string, payload []byte) string {
