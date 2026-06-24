@@ -103,11 +103,12 @@ func (e *NativeEngine) fetchPreChatdABProps(ctx context.Context, phone *waappv1.
 }
 
 func preChatdABPropParams(phone *waappv1.PhoneTarget, state nativeState) orderedParams {
+	lg, lc := registrationLocale(phone)
 	params := orderedParams{}
 	params.set("cc", phoneCC(phone), false)
 	params.set("in", phoneNational(phone), false)
-	params.set("lg", "en", false)
-	params.set("lc", "US", false)
+	params.set("lg", lg, false)
+	params.set("lc", lc, false)
 	params.set("fdid", state.Profile.FDID, false)
 	params.set("expid", state.Profile.ExpID, false)
 	if state.Profile.AccessSessionID != "" {

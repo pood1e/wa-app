@@ -13,14 +13,38 @@ import (
 	"time"
 
 	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/nyaruka/phonenumbers"
 )
 
+// registrationLocale 按号码国别派生注册 locale。lc(设备 region)优先采信号码自带的
+// country_iso2;否则取 libphonenumber 的 E.164→ISO-3166-1 alpha-2 权威映射(真源在标准
+// 数据集,非手编国别表)。lg 取 "en" —— 英文 UI 全球通用,en + 本地 region 自洽。
+// 无法解析国别时退回 en/US。
+func registrationLocale(phone *waappv1.PhoneTarget) (lg string, lc string) {
+	return "en", registrationDeviceCountryISO(phone)
+}
+
+func registrationDeviceCountryISO(phone *waappv1.PhoneTarget) string {
+	if iso := strings.ToUpper(strings.TrimSpace(phone.GetCountryIso2())); len(iso) == 2 {
+		return iso
+	}
+	code, err := strconv.Atoi(phoneCC(phone))
+	if err != nil || code <= 0 {
+		return "US"
+	}
+	if region := phonenumbers.GetRegionCodeForCountryCode(code); region != "" && region != "ZZ" {
+		return region
+	}
+	return "US"
+}
+
 func (e *NativeEngine) existParams(phone *waappv1.PhoneTarget, state nativeState) (map[string]string, map[string]struct{}) {
+	lg, lc := registrationLocale(phone)
 	params := map[string]string{
 		"cc":                phoneCC(phone),
 		"in":                phoneNational(phone),
-		"lg":                "en",
-		"lc":                "US",
+		"lg":                lg,
+		"lc":                lc,
 		"fdid":              state.Profile.FDID,
 		"expid":             state.Profile.ExpID,
 		"access_session_id": state.Profile.AccessSessionID,
@@ -57,11 +81,12 @@ func (e *NativeEngine) codeRequestOrderedParamsWithWamsys(ctx context.Context, p
 	methodName := registrationMethodName(method, "sms")
 	fields := nativeDeviceMapFields(state)
 	attempts := nativeCodeRequestAttempts(state)
+	lg, lc := registrationLocale(phone)
 	params := orderedParams{}
 	params.set("cc", phoneCC(phone), false)
 	params.set("in", phoneNational(phone), false)
-	params.set("lg", "en", false)
-	params.set("lc", "US", false)
+	params.set("lg", lg, false)
+	params.set("lc", lc, false)
 	params.set("fdid", state.Profile.FDID, false)
 	params.set("expid", state.Profile.ExpID, false)
 	if state.Profile.AccessSessionID != "" {

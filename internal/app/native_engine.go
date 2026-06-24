@@ -754,12 +754,13 @@ func omitEmptyNativeOperatorField(key string, value string) bool {
 
 func (e *NativeEngine) registerParams(phone *waappv1.PhoneTarget, method waappv1.VerificationDeliveryMethod, code string, state nativeState, authCodeContext string) (map[string]string, map[string]struct{}) {
 	methodName := firstNonEmpty(state.LastCodeParams["method"], registrationMethodName(method, "sms"))
+	lg, lc := registrationLocale(phone)
 	params := map[string]string{
 		"cc":                phoneCC(phone),
 		"in":                phoneNational(phone),
 		"method":            methodName,
-		"lg":                firstNonEmpty(state.LastCodeParams["lg"], "en"),
-		"lc":                firstNonEmpty(state.LastCodeParams["lc"], "US"),
+		"lg":                firstNonEmpty(state.LastCodeParams["lg"], lg),
+		"lc":                firstNonEmpty(state.LastCodeParams["lc"], lc),
 		"fdid":              firstNonEmpty(state.LastCodeParams["fdid"], state.Profile.FDID),
 		"expid":             firstNonEmpty(state.LastCodeParams["expid"], state.Profile.ExpID),
 		"access_session_id": firstNonEmpty(state.LastCodeParams["access_session_id"], state.Profile.AccessSessionID),
