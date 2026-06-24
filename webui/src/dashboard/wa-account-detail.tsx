@@ -7,7 +7,8 @@ import { WaAccountProfileSettings } from './wa-account-profile-settings';
 import { WaAccountSecurityPanel } from './wa-account-security';
 import { WaDeviceFingerprintPanel } from './wa-device-fingerprint';
 import { WA_REGISTRATION_OTP_LENGTH } from './wa-registration-otp-card';
-import { accountReasonLabel, waAccountStatusView, type StatusView } from './wa-result-labels';
+import { accountReasonLabel, type StatusView } from './wa-result-labels';
+import { useWaLongConnectionIndex, waAccountDisplayStatus } from './wa-long-connection-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,10 +93,12 @@ function ManualOtpSubmit({ account, busy, onDone, onError }: { account: WAAccoun
 }
 
 function InfoGrid({ account }: { account: WAAccount }) {
+  const { byAccount } = useWaLongConnectionIndex();
+  const connection = byAccount.get(account.wa_account_id);
   const rows: Array<{ label: string; value: ReactNode }> = [
     { label: '名称', value: account.display_name?.trim() || '-' },
     { label: '账号 ID', value: waAccountID(account) },
-    { label: '状态', value: <StatusBadge view={waAccountStatusView(account.status)} /> },
+    { label: '状态', value: <StatusBadge view={waAccountDisplayStatus(account, connection)} /> },
     { label: '手机号', value: account.phone?.e164_number || '-' },
     { label: '国家', value: account.phone?.country_iso2 || '-' },
     { label: '拨号码', value: account.phone?.country_calling_code || '-' },

@@ -3,13 +3,28 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { WaErrorCode } from '../proto/byte/v/forge/waapp/v1/common';
 import { LongConnectionStatus, type LongConnectionState } from '../proto/byte/v/forge/waapp/v1/messaging';
+import { WAAccountStatus, type WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { getWaConnections, waKeys } from './wa-api';
+import { waAccountStatusView, type StatusView } from './wa-result-labels';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 // 账号被转出/在其他设备登录后,长连接被作废:终态 STOPPED 且 last_error 为 CONFLICT。
 export function isConnectionTransferredOut(connection?: LongConnectionState) {
   return connection?.status === LongConnectionStatus.LONG_CONNECTION_STATUS_STOPPED && connection?.last_error?.code === WaErrorCode.WA_ERROR_CODE_CONFLICT;
+}
+
+// waAccountDisplayStatus 把账号对外状态派生自「账号生命周期 + 长连接实况」,避免 account.status
+// 与连接实况漂移(连接已停/失效却仍显示“正常”)。非 ACTIVE 生命周期(等待验证码/暂停/归档/已转出)
+// 按其本身展示;ACTIVE 账号则反映连接实况:已连接→正常,启动/重连→连接中,STOPPED+CONFLICT→已转出
+// (被接管),其余(已停止/失败/无连接)→离线。
+export function waAccountDisplayStatus(account: WAAccount, connection?: LongConnectionState): StatusView {
+  if (account.status !== WAAccountStatus.WA_ACCOUNT_STATUS_ACTIVE) return waAccountStatusView(account.status);
+  if (isConnectionTransferredOut(connection)) return { label: '已转出', variant: 'destructive', tone: 'bad' };
+  const status = connection?.status;
+  if (status === LongConnectionStatus.LONG_CONNECTION_STATUS_CONNECTED || status === LongConnectionStatus.LONG_CONNECTION_STATUS_HEARTBEAT_WAITING) return { label: '正常', variant: 'default', tone: 'ok' };
+  if (status === LongConnectionStatus.LONG_CONNECTION_STATUS_RECONNECTING || status === LongConnectionStatus.LONG_CONNECTION_STATUS_STARTING) return { label: '连接中', variant: 'secondary', tone: 'warn' };
+  return { label: '离线', variant: 'outline', tone: 'idle' };
 }
 
 export function useWaLongConnectionIndex() {
