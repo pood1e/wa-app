@@ -156,6 +156,7 @@ export function WaAccountAdd({ disabled, onChanged, onDone, onError }: Props) {
             disabled={busy || disabled || Boolean(pending) || channelsHardBlocked}
             onStart={(method) => void startRegistration(method)}
           />
+          <p className="px-1 text-[11px] text-muted-foreground">「旧设备」用于从真机转入账号：真机 WhatsApp 仍在线时，验证码会发送到真机，读取后填入下方完成转入。</p>
         </Field>
         {pending && <WaRegistrationOtpCard value={otp} busy={busy} onChange={setOtp} onSubmit={() => void submitOTP()} />}
       </CardContent>
