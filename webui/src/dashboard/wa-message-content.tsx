@@ -70,13 +70,13 @@ function markdownInline(text: string, keyPrefix: string) {
 function LinkPreview({ url }: { url: string }) {
   const host = linkHost(url);
   return (
-    <a className="mt-2 flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-50" href={url} rel="noreferrer" target="_blank">
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-emerald-700">
+    <a className="mt-2 flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-card p-3 text-foreground transition hover:bg-accent" href={url} rel="noreferrer" target="_blank">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
         <ExternalLink size={16} />
       </span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium">{host || '打开链接'}</span>
-        <span className="block truncate text-xs text-emerald-700/80">{url}</span>
+        <span className="block truncate text-xs text-muted-foreground">{url}</span>
       </span>
     </a>
   );

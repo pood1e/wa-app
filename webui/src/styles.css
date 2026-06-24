@@ -52,6 +52,7 @@ body {
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --color-chat-background: var(--chat-background);
+  --color-chat-bubble-out: var(--chat-bubble-out);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -64,9 +65,10 @@ body {
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
-  /* 聊天背景基色 + doodle 着色,对齐 WhatsApp APK default_wallpaper_themed 亮色主题 */
+  /* 聊天背景基色 + doodle 着色 + 外发气泡色,对齐 WhatsApp APK 亮色主题取值 */
   --chat-background: #fcede3;
   --chat-doodle: #edd4c5;
+  --chat-bubble-out: #d9fdd3;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -102,9 +104,10 @@ body {
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  /* 聊天背景基色 + doodle 着色,对齐 WhatsApp APK default_wallpaper_themed 暗色主题 */
+  /* 聊天背景基色 + doodle 着色 + 外发气泡色,对齐 WhatsApp APK 暗色主题取值 */
   --chat-background: #0a0a0a;
   --chat-doodle: #191310;
+  --chat-bubble-out: #103529;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);

@@ -57,7 +57,7 @@ function BubbleMessage() {
   return (
     <MessagePrimitive.Root className={`flex w-full ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div className={`flex max-w-[min(640px,82%)] flex-col ${outgoing ? 'items-end' : 'items-start'}`}>
-        <div className={`w-fit max-w-full rounded-3xl border px-4 py-3 shadow-sm ${outgoing ? 'rounded-tr-md border-emerald-200 bg-emerald-50' : unread ? 'rounded-tl-md border-emerald-200 bg-emerald-50/70' : 'rounded-tl-md border-border bg-card'}`}>
+        <div className={`w-fit max-w-full rounded-3xl border px-4 py-3 text-foreground shadow-sm ${outgoing ? 'rounded-tr-md border-transparent bg-chat-bubble-out' : unread ? 'rounded-tl-md border-transparent bg-chat-bubble-out' : 'rounded-tl-md border-border bg-card'}`}>
           {unread ? <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground"><Badge>未读</Badge></div> : null}
           <WaMessageContent text={meta?.displayText || ''} />
         </div>
