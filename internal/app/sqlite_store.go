@@ -276,7 +276,15 @@ func (s *SQLiteStore) GetActiveLoginState(ctx context.Context, waAccountIDValue 
 }
 
 func (s *SQLiteStore) ListActiveLoginStates(ctx context.Context) ([]LoginStateRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM wa_sqlite_login_states WHERE status=? ORDER BY updated_at DESC`, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE.String())
+	return s.listLoginStatesByStatus(ctx, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE)
+}
+
+func (s *SQLiteStore) ListRevokedLoginStates(ctx context.Context) ([]LoginStateRecord, error) {
+	return s.listLoginStatesByStatus(ctx, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_REVOKED)
+}
+
+func (s *SQLiteStore) listLoginStatesByStatus(ctx context.Context, status waappv1.LoginStateStatus) ([]LoginStateRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM wa_sqlite_login_states WHERE status=? ORDER BY updated_at DESC`, status.String())
 	if err != nil {
 		return nil, err
 	}

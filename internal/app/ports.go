@@ -34,6 +34,7 @@ type Store interface {
 	GetLoginState(context.Context, string) (*waappv1.LoginState, error)
 	GetActiveLoginState(context.Context, string, string) (*waappv1.LoginState, error)
 	ListActiveLoginStates(context.Context) ([]LoginStateRecord, error)
+	ListRevokedLoginStates(context.Context) ([]LoginStateRecord, error)
 	GetLoginStateByRegistration(context.Context, string) (*waappv1.LoginState, error)
 	GetLoginStateByRegisteredIdentity(context.Context, string) (*waappv1.LoginState, error)
 

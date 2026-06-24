@@ -202,7 +202,55 @@ func (m *LongConnectionManager) restore(ctx context.Context) error {
 		}
 		m.Ensure(ctx, record.LoginState)
 	}
+	m.seedRevoked(ctx)
 	return nil
+}
+
+// seedRevoked 在启动时把已作废(转出/远程登出)的登录态喂回一个终态 STOPPED 快照,
+// 使「已转出」在进程重启后仍持续展示。这些 entry 不持有连接(cancel/runner 为空),
+// 也不会被 restore 的 active 循环或 Ensure 拉起(只拉 ACTIVE 登录态)。
+func (m *LongConnectionManager) seedRevoked(ctx context.Context) {
+	records, err := m.server.store.ListRevokedLoginStates(ctx)
+	if err != nil {
+		log.Printf("WA long connection restore revoked failed: %v", sanitizeLogError(err))
+		return
+	}
+	for _, record := range records {
+		if ctx.Err() != nil {
+			return
+		}
+		m.seedRevokedEntry(record.LoginState)
+	}
+}
+
+func (m *LongConnectionManager) seedRevokedEntry(loginState *waappv1.LoginState) {
+	if loginState == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.rootCtx == nil {
+		return
+	}
+	key := longConnectionKey(loginState)
+	if _, ok := m.entries[key]; ok {
+		return
+	}
+	lastErr := loginState.GetLastError()
+	if lastErr == nil {
+		lastErr = ToProtoError(accountLoggedOutError(""))
+	}
+	m.entries[key] = &longConnectionEntry{
+		revoked: true,
+		snapshot: &waappv1.LongConnectionState{
+			LoginStateId:         loginState.GetLoginStateId(),
+			WaAccountId:          loginState.GetWaAccountId(),
+			ClientProfileId:      loginState.GetClientProfileId(),
+			RegisteredIdentityId: loginState.GetRegisteredIdentityId(),
+			Status:               waappv1.LongConnectionStatus_LONG_CONNECTION_STATUS_STOPPED,
+			LastError:            lastErr,
+		},
+	}
 }
 
 func (m *LongConnectionManager) cleanupStaleMessageSessions(ctx context.Context) {

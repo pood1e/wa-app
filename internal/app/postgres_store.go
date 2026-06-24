@@ -337,10 +337,18 @@ func (s *PostgresStore) GetActiveLoginState(ctx context.Context, waAccountIDValu
 }
 
 func (s *PostgresStore) ListActiveLoginStates(ctx context.Context) ([]LoginStateRecord, error) {
+	return s.listLoginStatesByStatus(ctx, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE)
+}
+
+func (s *PostgresStore) ListRevokedLoginStates(ctx context.Context) ([]LoginStateRecord, error) {
+	return s.listLoginStatesByStatus(ctx, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_REVOKED)
+}
+
+func (s *PostgresStore) listLoginStatesByStatus(ctx context.Context, status waappv1.LoginStateStatus) ([]LoginStateRecord, error) {
 	rows, err := s.pool.Query(ctx, `SELECT login_state_id,registration_id,wa_account_id,client_profile_id,registered_identity_id,service_account_id,service_login_id,status,last_error_code,last_error_message,last_error_retryable,registered_at,last_verified_at,created_at,updated_at
 FROM wa_login_states
 WHERE status=$1
-ORDER BY updated_at DESC`, waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE.String())
+ORDER BY updated_at DESC`, status.String())
 	if err != nil {
 		return nil, err
 	}
