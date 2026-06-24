@@ -53,7 +53,7 @@ func (s *Server) ResolveWAContacts(ctx context.Context, req *waappv1.ResolveWACo
 	if err != nil {
 		return &waappv1.ResolveWAContactsResponse{Error: ToProtoError(err)}, nil
 	}
-	runner, release, err := s.contactResolverRunner(ctx, req.GetContext())
+	runner, release, err := s.contactResolverRunner(loginState)
 	if err != nil {
 		return &waappv1.ResolveWAContactsResponse{Error: ToProtoError(err)}, nil
 	}
@@ -150,7 +150,15 @@ func (s *Server) activeContactResolveLoginState(ctx context.Context, accountID s
 	return nil, NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REGISTRATION_NOT_FOUND, "active login state not found", false)
 }
 
-func (s *Server) contactResolverRunner(ctx context.Context, requestContext *waappv1.RequestContext) (ProtocolEngine, func(), error) {
+// contactResolverRunner 优先复用该账号已建立的长连接 runner,让 usync 走同一条 chatd 连接
+// (每账号一条连接),避免另开并发 ACTIVE 连接触发服务端 <conflict type="replaced"> 自我顶替。
+// 长连接尚未就绪时回退到独立 runner(短连接窗口),与 accountSettingsRunner 一致。
+func (s *Server) contactResolverRunner(loginState *waappv1.LoginState) (ProtocolEngine, func(), error) {
+	if s.longConnections != nil {
+		if runner := s.longConnections.Runner(loginState); runner != nil {
+			return runner, func() {}, nil
+		}
+	}
 	return s.runner, func() {}, nil
 }
 

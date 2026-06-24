@@ -150,6 +150,15 @@ func (e *longConnectionNativeEngine) ApplyAccountSettings(ctx context.Context, i
 	return e.NativeEngine.applyAccountSettingsWithSender(ctx, input, state, e)
 }
 
+// ResolveContacts 让联系人 usync 复用这条共享长连接(单 chatd),而不是另开并发 ACTIVE 连接,
+// 从而不再自我触发服务端 <conflict type="replaced">。
+func (e *longConnectionNativeEngine) ResolveContacts(ctx context.Context, input EngineContactResolveInput) EngineContactResolveResult {
+	if e == nil || e.NativeEngine == nil {
+		return EngineContactResolveResult{Err: NewError(waappv1.WaErrorCode_WA_ERROR_CODE_INTERNAL, "native engine is required", false)}
+	}
+	return e.NativeEngine.resolveContactsWithSender(ctx, input, e)
+}
+
 func (e *longConnectionNativeEngine) sendIQ(ctx context.Context, state nativeState, registeredIdentityID string, appVersion string, request chatdNode, timeoutMessage string) (chatdNode, chatdSessionUpdate, error) {
 	if err := e.lockInteractiveIQLocked(ctx); err != nil {
 		return chatdNode{}, chatdSessionUpdate{}, err

@@ -18,6 +18,14 @@ const (
 )
 
 func (e *NativeEngine) ResolveContacts(ctx context.Context, input EngineContactResolveInput) EngineContactResolveResult {
+	return e.resolveContactsWithSender(ctx, input, nil)
+}
+
+// resolveContactsWithSender 执行联系人 usync。sender 非空时复用调用方已建立的 chatd 连接
+// (长连接把消息/IQ/usync 多路复用在同一条 noise 连接上,对齐官方单 ConnectionThread 模型),
+// 避免为 usync 另开一条并发 ACTIVE 连接而触发服务端 <conflict type="replaced"> 自我顶替。
+// sender 为空时回退到独立短连接(无活跃长连接的窗口)。
+func (e *NativeEngine) resolveContactsWithSender(ctx context.Context, input EngineContactResolveInput, sender chatdIQSender) EngineContactResolveResult {
 	jids := normalizeContactUsyncJIDs(input.JIDs)
 	if len(jids) == 0 {
 		return EngineContactResolveResult{}
@@ -39,15 +47,17 @@ func (e *NativeEngine) ResolveContacts(ctx context.Context, input EngineContactR
 		allContacts = dedupeWAContacts(allContacts)
 		return EngineContactResolveResult{Contacts: allContacts, Queried: inputQueriedCount(input.JIDs), Resolved: contactUsyncIdentityCount(allContacts)}
 	}
-	proxyURL, err := e.proxyURL()
-	if err != nil {
-		return EngineContactResolveResult{Contacts: allContacts, Queried: inputQueriedCount(input.JIDs), Resolved: contactUsyncIdentityCount(allContacts), Err: err}
+	if sender == nil {
+		proxyURL, err := e.proxyURL()
+		if err != nil {
+			return EngineContactResolveResult{Contacts: allContacts, Queried: inputQueriedCount(input.JIDs), Resolved: contactUsyncIdentityCount(allContacts), Err: err}
+		}
+		timeout := input.RemoteTimeout
+		if timeout <= 0 {
+			timeout = defaultContactUsyncTimeout
+		}
+		sender = newChatdClient(chatdConfigForState(proxyURL, state, timeout))
 	}
-	timeout := input.RemoteTimeout
-	if timeout <= 0 {
-		timeout = defaultContactUsyncTimeout
-	}
-	client := newChatdClient(chatdConfigForState(proxyURL, state, timeout))
 	for _, batch := range chunkStrings(jids, maxContactUsyncBatchSize) {
 		var batchContacts []*waappv1.WAContact
 		var lastErr error
@@ -56,7 +66,7 @@ func (e *NativeEngine) ResolveContacts(ctx context.Context, input EngineContactR
 		for _, variant := range contactUsyncVariants() {
 			hadPictureQuery = hadPictureQuery || contactUsyncVariantIncludesPicture(variant)
 			request := buildContactUsyncIQ(e.ids.NewID("waiq_"), e.ids.NewID("sync_sid_query_"), contactUsyncRefsFromJIDs(batch), variant)
-			response, update, err := client.sendIQ(ctx, state, input.RegisteredIdentityID, input.AppVersion, request, "contact usync iq timed out")
+			response, update, err := sender.sendIQ(ctx, state, input.RegisteredIdentityID, input.AppVersion, request, "contact usync iq timed out")
 			if applyChatdSessionUpdateState(&state, update) {
 				_ = e.saveState(ctx, input.ClientProfileID, state)
 			}
@@ -81,7 +91,7 @@ func (e *NativeEngine) ResolveContacts(ctx context.Context, input EngineContactR
 		allContacts = append(allContacts, batchContacts...)
 	}
 	allContacts = dedupeWAContacts(allContacts)
-	if profileContacts := e.resolveBusinessProfileContacts(ctx, client, state, input, allContacts); len(profileContacts) > 0 {
+	if profileContacts := e.resolveBusinessProfileContacts(ctx, sender, state, input, allContacts); len(profileContacts) > 0 {
 		allContacts = dedupeWAContacts(append(allContacts, profileContacts...))
 	}
 	return EngineContactResolveResult{Contacts: allContacts, Queried: inputQueriedCount(input.JIDs), Resolved: contactUsyncIdentityCount(allContacts)}
@@ -656,7 +666,7 @@ func businessVerifiedNodeName(node chatdNode) string {
 	return ""
 }
 
-func (e *NativeEngine) resolveBusinessProfileContacts(ctx context.Context, client *chatdClient, state nativeState, input EngineContactResolveInput, contacts []*waappv1.WAContact) []*waappv1.WAContact {
+func (e *NativeEngine) resolveBusinessProfileContacts(ctx context.Context, sender chatdIQSender, state nativeState, input EngineContactResolveInput, contacts []*waappv1.WAContact) []*waappv1.WAContact {
 	refs := businessProfileRefs(contacts)
 	if len(refs) == 0 {
 		return nil
@@ -664,7 +674,7 @@ func (e *NativeEngine) resolveBusinessProfileContacts(ctx context.Context, clien
 	out := []*waappv1.WAContact{}
 	for _, ref := range refs {
 		for _, request := range buildBusinessProfileIQs(e.ids.NewID, ref) {
-			response, update, err := client.sendIQ(ctx, state, input.RegisteredIdentityID, input.AppVersion, request, businessProfileTimeoutText)
+			response, update, err := sender.sendIQ(ctx, state, input.RegisteredIdentityID, input.AppVersion, request, businessProfileTimeoutText)
 			if applyChatdSessionUpdateState(&state, update) {
 				_ = e.saveState(ctx, input.ClientProfileID, state)
 			}

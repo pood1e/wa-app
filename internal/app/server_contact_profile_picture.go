@@ -39,7 +39,7 @@ func (s *Server) contactProfilePictureRunner(ctx context.Context, loginState *wa
 			}
 		}
 	}
-	return s.contactResolverRunner(ctx, &waappv1.RequestContext{})
+	return s.contactResolverRunner(loginState)
 }
 
 func contactProfilePictureRemoteTimeout(runner ProtocolEngine) time.Duration {
