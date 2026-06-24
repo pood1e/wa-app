@@ -88,6 +88,10 @@ func (e *NativeEngine) PrepareClientProfile(ctx context.Context, input EnginePro
 	return e.saveState(ctx, input.ClientProfileID, state)
 }
 
+// existProbeTransientAttempts 限定 /v2/exist 探测在纯传输层失败(代理/网络抖动,响应
+// 无任何可解析的应用层结论)时的最大尝试次数。exist 是幂等检查,重试安全。
+const existProbeTransientAttempts = 3
+
 func (e *NativeEngine) ProbeAccount(ctx context.Context, input EngineRegistrationInput) EngineProbeResult {
 	state, err := e.newState(input.Phone)
 	if err != nil {
@@ -111,8 +115,18 @@ func (e *NativeEngine) probeAccountWithState(ctx context.Context, input EngineRe
 	if err != nil {
 		return EngineProbeResult{Status: waappv1.AccountProbeStatus_ACCOUNT_PROBE_STATUS_REJECTED, Err: err}, state
 	}
-	data, _, err := client.postWASafe(ctx, defaultWAExistURL, plain, nativeUserAgentForState(state, input.AppVersion), state.Attestation)
-	result := parseExistProbeResult(data)
+	// /v2/exist 幂等;纯传输层抖动(代理 EOF/重置/超时,响应无任何可解析的应用层结论)
+	// 时重试若干次,避免单次代理失败被判成 probe_failed —— 那会让前端对同一号码"通道
+	// 忽有忽无"。拿到成功响应、真正的应用层结论(含协议拒绝)或 ctx 取消即停。
+	var data map[string]any
+	var result EngineProbeResult
+	for attempt := 1; attempt <= existProbeTransientAttempts; attempt++ {
+		data, _, err = client.postWASafe(ctx, defaultWAExistURL, plain, nativeUserAgentForState(state, input.AppVersion), state.Attestation)
+		result = parseExistProbeResult(data)
+		if err == nil || result.Err != nil || parsedExistApplicationOutcome(result) || ctx.Err() != nil {
+			break
+		}
+	}
 	if err != nil {
 		if result.Err != nil || parsedExistApplicationOutcome(result) {
 			return result, state
