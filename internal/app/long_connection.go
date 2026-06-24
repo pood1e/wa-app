@@ -219,8 +219,40 @@ func (m *LongConnectionManager) seedRevoked(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		if loginRevokedByReplaced(record.LoginState) {
+			m.reactivateFalselyRevoked(ctx, record.LoginState)
+			continue
+		}
 		m.seedRevokedEntry(record.LoginState)
 	}
+}
+
+// loginRevokedByReplaced 判断登录态是否为 <conflict type="replaced"> 误报窗口造成的错误撤销。
+// replaced 已不再触发撤销(见 chatdAccountTakeoverConflictTypes),故该签名只命中那段时间被误判
+// 转出的在线账号;愈合后这些账号转为 ACTIVE、不再出现在已撤销列表,此分支即空操作。
+func loginRevokedByReplaced(loginState *waappv1.LoginState) bool {
+	return loginState != nil && strings.Contains(loginState.GetLastError().GetMessage(), "type=replaced")
+}
+
+// reactivateFalselyRevoked 自愈被 replaced 误判转出的账号:登录态与账号状态重置为 ACTIVE 并重新上线。
+func (m *LongConnectionManager) reactivateFalselyRevoked(ctx context.Context, loginState *waappv1.LoginState) {
+	now := m.server.clock.Now()
+	loginState.Status = waappv1.LoginStateStatus_LOGIN_STATE_STATUS_ACTIVE
+	loginState.LastError = nil
+	if loginState.Audit == nil {
+		loginState.Audit = &waappv1.AuditStamp{CreatedAt: timestamppb.New(now)}
+	}
+	loginState.Audit.UpdatedAt = timestamppb.New(now)
+	if err := m.server.store.SaveLoginState(ctx, loginState, "native-db:"+loginState.GetClientProfileId()); err != nil {
+		log.Printf("WA long connection reactivate (replaced) persist failed: registered_identity=%s error=%v", loginState.GetRegisteredIdentityId(), sanitizeLogError(err))
+		return
+	}
+	if account, err := m.server.getWAAccount(ctx, loginState.GetWaAccountId()); err == nil && account != nil &&
+		waAccountStatus(account) == waappv1.WAAccountStatus_WA_ACCOUNT_STATUS_TRANSFERRED_OUT {
+		_, _ = m.server.saveWAAccount(ctx, withWAAccountStatus(account, waappv1.WAAccountStatus_WA_ACCOUNT_STATUS_ACTIVE, now))
+	}
+	log.Printf("WA long connection reactivated falsely-revoked account (replaced): registered_identity=%s", loginState.GetRegisteredIdentityId())
+	m.Ensure(ctx, loginState)
 }
 
 func (m *LongConnectionManager) seedRevokedEntry(loginState *waappv1.LoginState) {
