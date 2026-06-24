@@ -56,20 +56,27 @@ func accountLoggedOutError(reason string) error {
 	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, reason, false)
 }
 
-// chatdDeviceRemovedMarker 是 device_removed 登出信号在错误消息里的稳定标记,贯穿
-// chatd 错误构造与 long-connection 的 isDeviceRemovedError 识别。
-const chatdDeviceRemovedMarker = "device_removed"
+// chatdAccountTakeoverMarker 是"账号被接管"登出信号在错误消息里的稳定标记,贯穿 chatd 错误构造
+// 与 long-connection 的 isAccountTakeoverError 识别。
+const chatdAccountTakeoverMarker = "account_takeover"
 
-// chatdTerminalNodeDeviceRemoved 判断 chatd 终端控制节点(stream:error/failure/error)是否携带
-// <conflict type="device_removed">:本设备已被服务端移除(号码已在其他设备注册/被接管)。对齐 APK
-// X.1FJ(ErrorStanzaHandler):取 <conflict> 子节点、读 type 属性、等于 "device_removed" 即触发登出。
-func chatdTerminalNodeDeviceRemoved(node chatdNode) bool {
-	if chatdNodeIsDeviceRemovedConflict(node) {
+// chatdAccountTakeoverConflictTypes 是 chatd <conflict type=…> 中表示"本设备已被接管/登出"的取值:
+//   - device_removed: 设备被服务端移除(对齐 APK X.1FJ ErrorStanzaHandler 的登出判定);
+//   - replaced: 会话被另一台设备的新登录顶替,对主设备号即号码已在其他设备注册(被接管)。
+var chatdAccountTakeoverConflictTypes = map[string]struct{}{
+	"device_removed": {},
+	"replaced":       {},
+}
+
+// chatdTerminalNodeAccountTakeover 判断 chatd 终端控制节点(stream:error/failure/error)是否携带
+// 表示账号被接管的 <conflict type="device_removed"|"replaced">(号码已在其他设备注册)。
+func chatdTerminalNodeAccountTakeover(node chatdNode) bool {
+	if chatdConflictIsAccountTakeover(node) {
 		return true
 	}
 	if children, ok := node.Content.([]chatdNode); ok {
 		for _, child := range children {
-			if chatdNodeIsDeviceRemovedConflict(child) {
+			if chatdConflictIsAccountTakeover(child) {
 				return true
 			}
 		}
@@ -77,14 +84,18 @@ func chatdTerminalNodeDeviceRemoved(node chatdNode) bool {
 	return false
 }
 
-func chatdNodeIsDeviceRemovedConflict(node chatdNode) bool {
-	return node.Tag == "conflict" && strings.TrimSpace(node.Attrs["type"]) == chatdDeviceRemovedMarker
+func chatdConflictIsAccountTakeover(node chatdNode) bool {
+	if node.Tag != "conflict" {
+		return false
+	}
+	_, ok := chatdAccountTakeoverConflictTypes[strings.TrimSpace(node.Attrs["type"])]
+	return ok
 }
 
-// deviceRemovedError 构造 device_removed 登出错误:非可重试 CONFLICT,消息以 device_removed 标记开头,
-// 供 chatdReceiveError 透传后由 isDeviceRemovedError 识别。
-func deviceRemovedError(summary string) error {
-	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, chatdDeviceRemovedMarker+": "+summary, false)
+// accountTakenOverError 构造账号被接管的登出错误:非可重试 CONFLICT,消息以 account_takeover 标记开头,
+// 供 chatdReceiveError 透传后由 isAccountTakeoverError 识别。
+func accountTakenOverError(summary string) error {
+	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, chatdAccountTakeoverMarker+": "+summary, false)
 }
 
 func accountLoggedOutMessage(l *chatdDeviceLogout) string {

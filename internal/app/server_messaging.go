@@ -117,6 +117,7 @@ func (s *Server) receiveMessageBatch(ctx context.Context, req *waappv1.ReceiveMe
 		return &waappv1.ReceiveMessageBatchResponse{Session: session, Error: ToProtoError(err)}, nil
 	}
 	if loggedOut != nil {
+		s.markWAAccountTransferredOut(ctx, session.GetWaAccountId())
 		s.revokeLongConnection(session.GetRegisteredIdentityId(), accountLoggedOutError(loggedOut.Reason))
 	}
 	return &waappv1.ReceiveMessageBatchResponse{Messages: result.Messages, Session: session}, nil

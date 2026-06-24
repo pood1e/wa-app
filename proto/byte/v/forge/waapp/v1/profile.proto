@@ -30,6 +30,8 @@ enum WAAccountStatus {
   WA_ACCOUNT_STATUS_PAUSED = 2;
   WA_ACCOUNT_STATUS_ARCHIVED = 3;
   WA_ACCOUNT_STATUS_PENDING_REGISTRATION = 4;
+  // 账号已在其他设备注册(转出/被接管),本端登录态作废;再次注册到本端会回到 ACTIVE。
+  WA_ACCOUNT_STATUS_TRANSFERRED_OUT = 5;
 }
 
 enum ClientProfileStatus {

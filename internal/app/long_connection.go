@@ -301,8 +301,8 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 				return
 			}
 			m.recordLoopError(key, reconnects, err)
-			if longConnectionTerminalError(err) || isDeviceRemovedError(err) {
-				m.persistIfDeviceRemoved(ctx, loginState, err)
+			if longConnectionTerminalError(err) || isAccountTakeoverError(err) {
+				m.persistIfAccountTakeover(ctx, loginState, err)
 				return
 			}
 			if !sleepContext(ctx, backoff) {
@@ -324,8 +324,8 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 			}
 			m.recordLoopError(key, reconnects, err)
 			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection runner unavailable"})
-			if longConnectionTerminalError(err) || isDeviceRemovedError(err) {
-				m.persistIfDeviceRemoved(ctx, loginState, err)
+			if longConnectionTerminalError(err) || isAccountTakeoverError(err) {
+				m.persistIfAccountTakeover(ctx, loginState, err)
 				return
 			}
 			if !sleepContext(ctx, backoff) {
@@ -348,14 +348,14 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 				}
 				lastErr = err
 				m.recordLoopError(key, reconnects, err)
-				terminal = longConnectionTerminalError(err) || isDeviceRemovedError(err)
+				terminal = longConnectionTerminalError(err) || isAccountTakeoverError(err)
 				break
 			}
 			if resp.GetError() != nil {
 				respErr := errorFromProto(resp.GetError())
 				lastErr = respErr
 				m.recordLoopError(key, reconnects, respErr)
-				terminal = longConnectionTerminalError(respErr) || isDeviceRemovedError(respErr)
+				terminal = longConnectionTerminalError(respErr) || isAccountTakeoverError(respErr)
 				break
 			}
 			now := m.server.clock.Now()
@@ -386,7 +386,7 @@ func (m *LongConnectionManager) runEntry(ctx context.Context, loginState *waappv
 		closeLongConnectionRunner(runner)
 		if terminal {
 			_, _ = m.server.CloseMessageSession(context.WithoutCancel(ctx), &waappv1.CloseMessageSessionRequest{Context: &waappv1.RequestContext{}, MessageSessionId: session.GetMessageSessionId(), Reason: "long connection account terminal"})
-			m.persistIfDeviceRemoved(ctx, loginState, lastErr)
+			m.persistIfAccountTakeover(ctx, loginState, lastErr)
 			return
 		}
 		if !receivedHeartbeat {
@@ -425,23 +425,23 @@ func longConnectionTerminalError(err error) bool {
 	}
 }
 
-// isDeviceRemovedError 判断错误是否为 chatd 下发的 device_removed 登出信号:服务端在
-// <stream:error>/<failure> 里带 <conflict type="device_removed">,表示本设备已被移除(号码已
-// 在其他设备注册/被接管)。对齐 APK ErrorStanzaHandler(X.1FJ)对该信号触发 deregister 的判定。
-// 经 chatdReceiveError 保留为非可重试 CONFLICT,消息含 device_removed 标记,区别于 generic failure。
-func isDeviceRemovedError(err error) bool {
+// isAccountTakeoverError 判断错误是否为 chatd 下发的"账号被接管"登出信号:服务端在
+// <stream:error>/<failure> 里带 <conflict type="device_removed"|"replaced">,表示本设备登录态已失效
+// (号码已在其他设备注册)。对齐 APK ErrorStanzaHandler(X.1FJ)对 conflict type 的登出判定。
+// 经 chatdReceiveError 保留为非可重试 CONFLICT,消息含 account_takeover 标记,区别于 generic failure。
+func isAccountTakeoverError(err error) bool {
 	if err == nil {
 		return false
 	}
 	protoErr := ToProtoError(err)
 	return protoErr.GetCode() == waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT &&
-		strings.Contains(protoErr.GetMessage(), chatdDeviceRemovedMarker)
+		strings.Contains(protoErr.GetMessage(), chatdAccountTakeoverMarker)
 }
 
-// persistIfDeviceRemoved 在长连接因 device_removed 终止时把登录态持久化为 REVOKED 并停连,
+// persistIfAccountTakeover 在长连接因账号被接管终止时把登录态持久化为 REVOKED 并停连,
 // 复用 device_logout 的"已转出"终态语义(重启后 restore 只拉 ACTIVE,不再被拉起)。
-func (m *LongConnectionManager) persistIfDeviceRemoved(ctx context.Context, loginState *waappv1.LoginState, err error) {
-	if isDeviceRemovedError(err) {
+func (m *LongConnectionManager) persistIfAccountTakeover(ctx context.Context, loginState *waappv1.LoginState, err error) {
+	if isAccountTakeoverError(err) {
 		m.server.markLoginTransferredOut(context.WithoutCancel(ctx), loginState, err)
 	}
 }
@@ -620,6 +620,7 @@ func (s *Server) markLoginTransferredOut(ctx context.Context, loginState *waappv
 	if err := s.store.SaveLoginState(ctx, loginState, "native-db:"+loginState.GetClientProfileId()); err != nil {
 		log.Printf("WA long connection persist transferred-out failed: registered_identity=%s error=%v", registeredIdentityID, sanitizeLogError(err))
 	}
+	s.markWAAccountTransferredOut(ctx, loginState.GetWaAccountId())
 	s.revokeLongConnection(registeredIdentityID, cause)
 }
 

@@ -303,8 +303,8 @@ func (s *chatdSession) consumeIncomingNode(input EngineMessageInput, node chatdN
 	}
 	if isChatdTerminalNode(node) {
 		summary := controlNodeSummary(node)
-		if chatdTerminalNodeDeviceRemoved(node) {
-			return update, nil, deviceRemovedError(summary)
+		if chatdTerminalNodeAccountTakeover(node) {
+			return update, nil, accountTakenOverError(summary)
 		}
 		return update, nil, newChatdError("server sent %s", summary)
 	}

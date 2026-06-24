@@ -549,10 +549,10 @@ func chatdReceiveError(err error) error {
 	if snippet := chatdSafeFailureMessage(err); snippet != "" {
 		message += ": " + snippet
 	}
-	// device_removed 是不可重试的登出终态(号码已在其他设备注册/被接管),透传为 CONFLICT 并保留
-	// 标记,使长连接据此持久化"已转出"而非无限重连;其余 chatd 收包失败仍为可重试 REJECTED。
-	if isDeviceRemovedError(err) {
-		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, chatdDeviceRemovedMarker+" "+message, false)
+	// 账号被接管(device_removed/replaced)是不可重试的登出终态(号码已在其他设备注册),透传为
+	// CONFLICT 并保留标记,使长连接据此持久化"已转出"而非无限重连;其余 chatd 收包失败仍为可重试 REJECTED。
+	if isAccountTakeoverError(err) {
+		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, chatdAccountTakeoverMarker+" "+message, false)
 	}
 	return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, message, true)
 }
