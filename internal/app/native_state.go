@@ -686,23 +686,18 @@ func nativeDeviceModelFromUserAgent(userAgent string) (nativeDeviceModel, bool) 
 	return nativeDeviceModel{Android: match[1], Vendor: match[2], Model: match[3]}, true
 }
 
-// 注册设备画像:对齐到实际采样的真机 Pixel 9 Pro XL / Android 16(komodo)。
-// gpia 的 _gp/_iln 等运行时 digest 须在这台机上 hook 采样,故把设备画像与之绑定为
-// 同一台,保证 UA/build/RAM 与 gpia 设备一致(而非"合成池 + 单一 gpia 值"不自洽)。
-// 后续可在 hook 采过 _gp/_iln 的每台真机基础上扩成多机池。
-// 注:取自真机 —— BuildDisplayID=CP1A.260505.005;device_ram 用实测 totalMem 派生:
-// ActivityManager.totalMem=16339992576 B(/proc/meminfo MemTotal 交叉验证一致)÷2^30=15.22 GiB
-// (Pixel 9 Pro XL 广告 16GB,实际 totalMem 15.22 GiB,与 device_ram 字段语义一致)。
-var nativeRegistrationDeviceModels = []nativeDeviceModel{
-	{Vendor: "Google", Model: "Pixel 9 Pro XL", Android: "16", BuildDisplayID: "CP1A.260505.005", MinRAMGiB: 15.22, MaxRAMGiB: 15.22},
-}
-
+// 注册设备画像池来自内嵌的 device_profiles.json(可经 WA_APP_DEVICE_PROFILES_FILE
+// 指向外部文件覆盖),加载/校验逻辑见 device_profiles.go。每账号注册时随机选一台并
+// 持久化到 nativeState.Profile;池由 parseDefaultDeviceProfiles 保证至少一台,故下面
+// 的下标/随机取用安全。GPIA 错误态物料里设备相关字段仅 did=BuildDisplayID 字符串,
+// APK digest 为常量,故多机型共用同一套 GPIA 常量自洽。
 func defaultNativeDeviceModel() nativeDeviceModel {
-	return nativeRegistrationDeviceModels[0]
+	return registrationDeviceModels()[0]
 }
 
 func newNativeRegistrationDeviceModel() nativeDeviceModel {
-	return nativeRegistrationDeviceModels[randomIndex(len(nativeRegistrationDeviceModels))]
+	pool := registrationDeviceModels()
+	return pool[randomIndex(len(pool))]
 }
 
 func nativeDeviceRAMGiB(model nativeDeviceModel) string {

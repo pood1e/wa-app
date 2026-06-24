@@ -15,6 +15,7 @@ type Config struct {
 	CommonProxy        string `env:"WA_COMMON_PROXY"`
 	PGDSN              string `env:"WA_APP_PG_DSN"`
 	RedisURL           string `env:"WA_APP_REDIS_URL"`
+	DeviceProfilesFile string `env:"WA_APP_DEVICE_PROFILES_FILE"`
 }
 
 func Load() Config {

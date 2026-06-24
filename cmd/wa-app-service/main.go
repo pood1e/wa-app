@@ -28,6 +28,9 @@ const (
 func main() {
 	cfg := config.Load()
 	dataDir := configValue(cfg.DataDir, defaultWAAppDataDirectory)
+	if err := app.LoadRegistrationDeviceProfiles(cfg.DeviceProfilesFile); err != nil {
+		log.Printf("wa-app device profiles override ignored: %v", err)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

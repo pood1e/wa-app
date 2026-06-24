@@ -1,0 +1,23 @@
+{
+  "_comment": "注册设备画像池(市面最常见机型)。运行时可用 WA_APP_DEVICE_PROFILES_FILE 指向外部文件覆盖,后续增删机型无需重建镜像。字段:vendor=Build.MANUFACTURER, model=Build.MODEL, android=系统版本, build_display_id=Build.DISPLAY, min/max_ram_gib=ActivityManager.totalMem(GiB,按变体区间)。每账号注册时随机选一台并持久化。build_display_id 为代表值,如需最高保真可按实测真机校正。",
+  "registration_profiles": [
+    { "vendor": "Google", "model": "Pixel 9 Pro XL", "android": "16", "build_display_id": "CP1A.260505.005", "min_ram_gib": 15.22, "max_ram_gib": 15.22 },
+    { "vendor": "samsung", "model": "SM-A155F", "android": "14", "build_display_id": "A155FXXU1AWL2", "min_ram_gib": 3.62, "max_ram_gib": 7.36 },
+    { "vendor": "samsung", "model": "SM-A145F", "android": "14", "build_display_id": "A145FXXS6CXK2", "min_ram_gib": 3.62, "max_ram_gib": 5.56 },
+    { "vendor": "samsung", "model": "SM-A057F", "android": "14", "build_display_id": "A057FXXU5CXK1", "min_ram_gib": 3.62, "max_ram_gib": 5.56 },
+    { "vendor": "samsung", "model": "SM-A346B", "android": "14", "build_display_id": "A346BXXS5CXK1", "min_ram_gib": 5.56, "max_ram_gib": 7.36 },
+    { "vendor": "samsung", "model": "SM-A546B", "android": "14", "build_display_id": "A546BXXU8CXL1", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "samsung", "model": "SM-S911B", "android": "14", "build_display_id": "S911BXXU4CXK1", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "samsung", "model": "SM-S928B", "android": "14", "build_display_id": "S928BXXU1AXL3", "min_ram_gib": 11.24, "max_ram_gib": 11.66 },
+    { "vendor": "Xiaomi", "model": "23021RAAEG", "android": "13", "build_display_id": "V14.0.5.0.TMQEUXM", "min_ram_gib": 3.62, "max_ram_gib": 7.36 },
+    { "vendor": "Xiaomi", "model": "23100RN82L", "android": "13", "build_display_id": "V14.0.9.0.TCKEUXM", "min_ram_gib": 3.62, "max_ram_gib": 7.36 },
+    { "vendor": "Xiaomi", "model": "23090RA98G", "android": "13", "build_display_id": "V14.0.13.0.UCNCNXM", "min_ram_gib": 7.36, "max_ram_gib": 11.24 },
+    { "vendor": "Xiaomi", "model": "23053RN02A", "android": "13", "build_display_id": "V14.0.6.0.TMRMIXM", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "OPPO", "model": "CPH2565", "android": "13", "build_display_id": "CPH2565_13.1.0.500(EX01)", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "realme", "model": "RMX3710", "android": "13", "build_display_id": "RMX3710_13.0.0.600(C.13)", "min_ram_gib": 5.56, "max_ram_gib": 7.36 },
+    { "vendor": "vivo", "model": "V2310", "android": "13", "build_display_id": "V2310A_A_13.1.6.4.W10", "min_ram_gib": 3.62, "max_ram_gib": 5.56 },
+    { "vendor": "motorola", "model": "motorola edge 40", "android": "14", "build_display_id": "U1TDS34.82-12-7-2", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "Infinix", "model": "Infinix X6831", "android": "13", "build_display_id": "X6831-H891ABCDEF-T-GL", "min_ram_gib": 7.36, "max_ram_gib": 7.66 },
+    { "vendor": "TECNO", "model": "TECNO KI5q", "android": "13", "build_display_id": "KI5q-H826ABCDEF-T-GL", "min_ram_gib": 7.36, "max_ram_gib": 7.66 }
+  ]
+}
