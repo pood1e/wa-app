@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+enum MessageContentType {
+  MESSAGE_CONTENT_TYPE_UNSPECIFIED = 0;
+  MESSAGE_CONTENT_TYPE_TEXT = 1;
+  MESSAGE_CONTENT_TYPE_IMAGE = 2;
+  MESSAGE_CONTENT_TYPE_VIDEO = 3;
+  MESSAGE_CONTENT_TYPE_AUDIO = 4;
+  MESSAGE_CONTENT_TYPE_DOCUMENT = 5;
+  MESSAGE_CONTENT_TYPE_STICKER = 6;
+  MESSAGE_CONTENT_TYPE_CONTACT = 7;
+  MESSAGE_CONTENT_TYPE_LOCATION = 8;
+  MESSAGE_CONTENT_TYPE_POLL = 9;
+  MESSAGE_CONTENT_TYPE_UNSUPPORTED = 10;
+  MESSAGE_CONTENT_TYPE_CONTROL = 11;
+}
+
+message MessageQuote {
+  string provider_message_id = 1;
+  string sender_ref = 2;
+  SensitiveText text = 3;
+}
+
+// Display projection. Media keys and raw protocol messages stay in private storage.
+message MessageContent {
+  MessageContentType type = 1;
+  MessageQuote quote = 2;
+  bool view_once = 3;
+  bool ephemeral = 4;
+  MessageChange change = 5;
+}
+
+enum MessageChangeType {
+  MESSAGE_CHANGE_TYPE_UNSPECIFIED = 0;
+  MESSAGE_CHANGE_TYPE_EDIT = 1;
+  MESSAGE_CHANGE_TYPE_REVOKE = 2;
+  MESSAGE_CHANGE_TYPE_REACTION = 3;
+}
+
+message MessageChange {
+  MessageChangeType type = 1;
+  string target_provider_message_id = 2;
+  string target_sender_ref = 3;
+  bool target_from_me = 4;
+  SensitiveText text = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  string target_contact_ref = 7;
+}
+
+message MessageReaction {
+  string sender_ref = 1;
+  string text = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}

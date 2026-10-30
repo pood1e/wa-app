@@ -4,37 +4,41 @@ import (
 	"strings"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/waproto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 type AccountMessageParts struct {
-	AccountID       string
-	SessionID       string
-	MessageID       string
-	Kind            waappv1.InboundMessageKind
-	EncryptionState waappv1.MessageEncryptionState
-	AckStatus       waappv1.MessageAckStatus
-	Direction       waappv1.AccountMessageDirection
-	Source          waappv1.AccountMessageSource
-	ContactRef      string
-	SenderRef       string
-	PayloadRef      string
-	Plaintext       string
-	Redacted        string
-	SecretRef       string
-	LastError       *waappv1.WaError
-	ReceivedAt      time.Time
-	ReadAt          time.Time
-	DeleteStatus    waappv1.MessageDeleteStatus
-	DeletedAt       time.Time
+	AccountID         string
+	SessionID         string
+	MessageID         string
+	ProviderID        string
+	Kind              waappv1.InboundMessageKind
+	EncryptionState   waappv1.MessageEncryptionState
+	AckStatus         waappv1.MessageAckStatus
+	Direction         waappv1.AccountMessageDirection
+	Source            waappv1.AccountMessageSource
+	ContactRef        string
+	SenderRef         string
+	PayloadRef        string
+	Plaintext         string
+	Redacted          string
+	SecretRef         string
+	LastError         *waappv1.WaError
+	ReceivedAt        time.Time
+	ReadAt            time.Time
+	ReadReceiptSentAt time.Time
+	DeleteStatus      waappv1.MessageDeleteStatus
+	DeletedAt         time.Time
+	Content           *waappv1.MessageContent
 }
 
 func NewAccountMessage(parts AccountMessageParts, includeSensitiveText bool) *waappv1.AccountMessage {
-	displayPlaintext := AccountMessageDisplayText(parts.Plaintext)
-	displayRedacted := AccountMessageDisplayText(parts.Redacted)
+	displayPlaintext := parts.Plaintext
+	displayRedacted := parts.Redacted
 	text := &waappv1.SensitiveText{
 		RedactedValue: shared.FirstNonEmpty(displayRedacted, shared.Redacted(displayPlaintext), PayloadTextSummary(parts.PayloadRef)),
 		SecretRef:     parts.SecretRef,
@@ -43,22 +47,25 @@ func NewAccountMessage(parts AccountMessageParts, includeSensitiveText bool) *wa
 		text.Value = displayPlaintext
 	}
 	return &waappv1.AccountMessage{
-		AccountMessageId: parts.MessageID,
-		WaAccountId:      parts.AccountID,
-		MessageSessionId: parts.SessionID,
-		ContactRef:       ContactRefForMessage(parts.ContactRef, parts.SenderRef),
-		SenderRef:        parts.SenderRef,
-		Direction:        AccountMessageDirection(parts.Direction, parts.Kind),
-		Source:           AccountMessageSource(parts.Source),
-		Kind:             parts.Kind,
-		EncryptionState:  parts.EncryptionState,
-		AckStatus:        parts.AckStatus,
-		Text:             text,
-		ReceivedAt:       shared.ProtoTimestamp(parts.ReceivedAt),
-		LastError:        parts.LastError,
-		ReadAt:           shared.ProtoTimestamp(parts.ReadAt),
-		DeleteStatus:     AccountMessageDeleteStatus(parts.DeleteStatus),
-		DeletedAt:        shared.ProtoTimestamp(parts.DeletedAt),
+		AccountMessageId:  parts.MessageID,
+		ProviderMessageId: parts.ProviderID,
+		WaAccountId:       parts.AccountID,
+		MessageSessionId:  parts.SessionID,
+		ContactRef:        ContactRefForMessage(parts.ContactRef, parts.SenderRef),
+		SenderRef:         parts.SenderRef,
+		Direction:         AccountMessageDirection(parts.Direction, parts.Kind),
+		Source:            AccountMessageSource(parts.Source),
+		Kind:              parts.Kind,
+		EncryptionState:   parts.EncryptionState,
+		AckStatus:         parts.AckStatus,
+		Text:              text,
+		ReceivedAt:        shared.ProtoTimestamp(parts.ReceivedAt),
+		LastError:         parts.LastError,
+		ReadAt:            shared.ProtoTimestamp(parts.ReadAt),
+		ReadReceiptSentAt: shared.ProtoTimestamp(parts.ReadReceiptSentAt),
+		DeleteStatus:      AccountMessageDeleteStatus(parts.DeleteStatus),
+		DeletedAt:         shared.ProtoTimestamp(parts.DeletedAt),
+		Content:           MessageContentOutput(parts.Content, includeSensitiveText),
 	}
 }
 
@@ -68,26 +75,45 @@ func NewAccountMessageFromInbound(accountID string, msg *waappv1.InboundMessage,
 	}
 	text := decrypted.GetPlaintextText()
 	return NewAccountMessage(AccountMessageParts{
-		AccountID:       accountID,
-		SessionID:       msg.GetMessageSessionId(),
-		MessageID:       msg.GetMessageId(),
-		Kind:            msg.GetKind(),
-		EncryptionState: msg.GetEncryptionState(),
-		AckStatus:       msg.GetAckStatus(),
-		Direction:       msg.GetDirection(),
-		Source:          msg.GetSource(),
-		ContactRef:      msg.GetContactRef(),
-		SenderRef:       msg.GetSenderRef(),
-		PayloadRef:      msg.GetPayloadRef(),
-		Plaintext:       text.GetValue(),
-		Redacted:        text.GetRedactedValue(),
-		SecretRef:       text.GetSecretRef(),
-		LastError:       msg.GetLastError(),
-		ReceivedAt:      shared.TimeFromProto(msg.GetReceivedAt()),
-		ReadAt:          ProtoTimeOrZero(msg.GetReadAt()),
-		DeleteStatus:    msg.GetDeleteStatus(),
-		DeletedAt:       ProtoTimeOrZero(msg.GetDeletedAt()),
+		AccountID:         accountID,
+		SessionID:         msg.GetMessageSessionId(),
+		MessageID:         msg.GetMessageId(),
+		ProviderID:        msg.GetProviderMessageId(),
+		Kind:              msg.GetKind(),
+		EncryptionState:   msg.GetEncryptionState(),
+		AckStatus:         msg.GetAckStatus(),
+		Direction:         msg.GetDirection(),
+		Source:            msg.GetSource(),
+		ContactRef:        msg.GetContactRef(),
+		SenderRef:         msg.GetSenderRef(),
+		PayloadRef:        msg.GetPayloadRef(),
+		Plaintext:         text.GetValue(),
+		Redacted:          text.GetRedactedValue(),
+		SecretRef:         text.GetSecretRef(),
+		LastError:         msg.GetLastError(),
+		ReceivedAt:        shared.TimeFromProto(msg.GetReceivedAt()),
+		ReadAt:            ProtoTimeOrZero(msg.GetReadAt()),
+		ReadReceiptSentAt: ProtoTimeOrZero(msg.GetReadReceiptSentAt()),
+		DeleteStatus:      msg.GetDeleteStatus(),
+		DeletedAt:         ProtoTimeOrZero(msg.GetDeletedAt()),
+		Content:           decrypted.GetContent(),
 	}, includeSensitiveText)
+}
+
+func MessageContentOutput(content *waappv1.MessageContent, sensitive bool) *waappv1.MessageContent {
+	if content == nil {
+		return nil
+	}
+	out := proto.Clone(content).(*waappv1.MessageContent)
+	if !sensitive {
+		if out.GetQuote().GetText() != nil {
+			out.Quote.Text.Value = ""
+		}
+		if out.GetChange().GetText() != nil {
+			out.Change.Text.Value = ""
+		}
+	}
+	return out
 }
 
 func AccountMessageDeleteStatus(status waappv1.MessageDeleteStatus) waappv1.MessageDeleteStatus {
@@ -127,25 +153,6 @@ func AccountMessageSource(source waappv1.AccountMessageSource) waappv1.AccountMe
 		return source
 	}
 	return waappv1.AccountMessageSource_ACCOUNT_MESSAGE_SOURCE_LONG_CONNECTION
-}
-
-func AccountMessageDisplayText(text string) string {
-	text = waproto.NormalizeWAFramedDisplayText(strings.TrimSpace(text))
-	if text == "" {
-		return ""
-	}
-	if value := waproto.WAJSONDisplayText(text); value != "" {
-		return value
-	}
-	if WAJSONLikeText(text) {
-		return ""
-	}
-	return text
-}
-
-func WAJSONLikeText(text string) bool {
-	text = strings.TrimSpace(text)
-	return strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}")
 }
 
 func PayloadTextSummary(payloadRef string) string {

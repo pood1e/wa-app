@@ -7,18 +7,13 @@ import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppRegistrationProto";
 option java_package = "com.bytevforge.waapp.v1";
 option php_namespace = "ByteVForge\\WaApp\\V1";
 
-service WaRegistrationService {
-  rpc ProbeAccount(ProbeAccountRequest) returns (ProbeAccountResponse);
-  rpc RequestVerificationCode(RequestVerificationCodeRequest) returns (RequestVerificationCodeResponse);
-  rpc RefreshAccountTransferChallenge(RefreshAccountTransferChallengeRequest) returns (RefreshAccountTransferChallengeResponse);
-  rpc SubmitVerificationCode(SubmitVerificationCodeRequest) returns (SubmitVerificationCodeResponse);
-  rpc GetRegistration(GetRegistrationRequest) returns (GetRegistrationResponse);
+service WaLoginService {
   rpc GetLoginState(GetLoginStateRequest) returns (GetLoginStateResponse);
   rpc GetActiveLoginState(GetActiveLoginStateRequest) returns (GetActiveLoginStateResponse);
   rpc CheckLoginState(CheckLoginStateRequest) returns (CheckLoginStateResponse);
@@ -92,6 +87,7 @@ enum RegistrationStatus {
   REGISTRATION_STATUS_REGISTERED = 3;
   REGISTRATION_STATUS_REJECTED = 4;
   REGISTRATION_STATUS_EXPIRED = 5;
+  REGISTRATION_STATUS_PENDING_PASSWORD = 6;
 }
 
 enum LoginStateStatus {

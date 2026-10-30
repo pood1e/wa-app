@@ -1,6 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 原创通用 doodle 纹理,仅作 CSS mask 取 alpha,着色由 --chat-doodle 提供。
-     非 WhatsApp 专有美术资产;如需 WA 原版 doodle 自行替换本文件。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
   <g fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="48" cy="40" r="11"/>

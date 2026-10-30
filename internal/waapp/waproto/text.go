@@ -10,8 +10,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
 	"google.golang.org/protobuf/encoding/protowire"
+
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 const (

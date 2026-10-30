@@ -1,60 +1,67 @@
 services:
-  # ── wa-app 核心服务 ─────────────────────────────────────────────
   wa-app:
-    image: ghcr.io/pood1e/wa-app-service:${WA_APP_IMAGE_TAG:-latest}
-    container_name: wa-app
+    image: ghcr.io/pood1e/wa-app/wa-app-service:${WA_APP_IMAGE_TAG:-latest}
+    build:
+      context: .
+      target: runtime
     environment:
-      WA_APP_LISTEN_ADDR: ${WA_APP_LISTEN_ADDR:-:50091}
-      WA_APP_DASHBOARD_HTTP_ADDR: ${WA_APP_DASHBOARD_HTTP_ADDR:-:8080}
-      WA_APP_DASHBOARD_STATIC_DIR: ${WA_APP_DASHBOARD_STATIC_DIR:-/app/dashboard/wa}
-      WA_APP_AUTH_PASSWORD: ${WA_APP_AUTH_PASSWORD:-}
+      WA_SERVICE_TOKEN: ${WA_SERVICE_TOKEN:?Set WA_SERVICE_TOKEN}
+      WA_APP_STORE: ${WA_APP_STORE:?Set WA_APP_STORE to postgres or sqlite}
       WA_APP_PG_DSN: ${WA_APP_PG_DSN:-}
-      WA_APP_REDIS_URL: ${WA_APP_REDIS_URL:-}
+      WA_APP_SQLITE_FILE: ${WA_APP_SQLITE_FILE:-/var/lib/wa-app/wa-app.sqlite3}
+      WA_APP_EPHEMERAL_STORE: ${WA_APP_EPHEMERAL_STORE:-memory}
+      WA_APP_VALKEY_URL: ${WA_APP_VALKEY_URL:-}
+      WA_ACCOUNT_ADD_TARGET: wa-account-add:50092
+      WA_APP_AUTH_PASSWORD: ${WA_APP_AUTH_PASSWORD:-}
       WA_COMMON_PROXY: ${WA_COMMON_PROXY:-}
-      WA_APP_DEVICE_PROFILES_FILE: ${WA_APP_DEVICE_PROFILES_FILE:-}
-      WA_APP_PLAY_INTEGRITY_API_URL: ${WA_APP_PLAY_INTEGRITY_API_URL:-}
-      WA_APP_PLAY_INTEGRITY_API_TOKEN: ${WA_APP_PLAY_INTEGRITY_API_TOKEN:-}
-      WA_APP_DATA_DIR: ${WA_APP_DATA_DIR:-/var/lib/wa-app}
     ports:
       - "127.0.0.1:50091:50091"
       - "127.0.0.1:8080:8080"
     volumes:
-      - wa-app-data:${WA_APP_DATA_DIR:-/var/lib/wa-app}
+      - wa-app-data:/var/lib/wa-app
     restart: unless-stopped
-    # depends_on:
-    #   postgres:
-    #     condition: service_started
-    #   redis:
-    #     condition: service_started
 
-  # ── PostgreSQL（可选）─────────────────────────────────────────
-  # 取消下方注释并设置 WA_APP_PG_DSN 以启用 PostgreSQL 持久化
-  # postgres:
-  #   image: postgres:17-alpine
-  #   container_name: wa-app-postgres
-  #   environment:
-  #     - POSTGRES_USER=wa-app
-  #     - POSTGRES_PASSWORD=wa-app-password
-  #     - POSTGRES_DB=wa-app
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
-  #   restart: unless-stopped
+  wa-account-add:
+    image: ghcr.io/pood1e/wa-app/wa-account-add-service:${WA_ACCOUNT_ADD_IMAGE_TAG:-latest}
+    build:
+      context: .
+      target: account-add
+    environment:
+      WA_SERVICE_TOKEN: ${WA_SERVICE_TOKEN:?Set WA_SERVICE_TOKEN}
+      WA_ACCOUNT_RUNTIME_TARGET: wa-app:50091
+      WA_COMMON_PROXY: ${WA_COMMON_PROXY:-}
+      WA_ACCOUNT_ADD_IOS_SIGNER_TARGET: ${WA_ACCOUNT_ADD_IOS_SIGNER_TARGET:-}
+      WA_ACCOUNT_ADD_ANDROID_SIGNER_TARGET: ${WA_ACCOUNT_ADD_ANDROID_SIGNER_TARGET:-}
+    restart: unless-stopped
 
-  # ── Redis（可选）──────────────────────────────────────────────
-  # 取消下方注释并设置 WA_APP_REDIS_URL 以启用 Redis 运行时状态
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: wa-app-redis
-  #   volumes:
-  #     - redis-data:/data
-  #   ports:
-  #     - "6379:6379"
-  #   restart: unless-stopped
+  valkey:
+    image: valkey/valkey:9.1.2-alpine
+    profiles: ["valkey"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18.6-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: wa_app
+      POSTGRES_DB: wa_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wa_app -d wa_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
 volumes:
   wa-app-data:
     name: wa-app-data
-  # postgres-data:
-  # redis-data:
+  postgres-data:

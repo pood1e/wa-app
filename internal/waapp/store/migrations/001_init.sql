@@ -37,13 +37,10 @@ CREATE TABLE IF NOT EXISTS wa_accounts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT '';
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_auth_configured BOOLEAN;
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_configured BOOLEAN;
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_address TEXT;
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_verified BOOLEAN;
-ALTER TABLE wa_accounts ADD COLUMN IF NOT EXISTS two_factor_email_confirmed BOOLEAN;
-ALTER TABLE wa_accounts DROP COLUMN IF EXISTS proxy_policy_json;
+CREATE TABLE IF NOT EXISTS wa_account_proxies (
+  wa_account_id TEXT PRIMARY KEY REFERENCES wa_accounts(wa_account_id) ON DELETE CASCADE,
+  configuration BYTEA NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS wa_client_profiles (
   client_profile_id TEXT PRIMARY KEY,
@@ -52,7 +49,6 @@ CREATE TABLE IF NOT EXISTS wa_client_profiles (
   status TEXT NOT NULL,
   registration_key_state TEXT NOT NULL,
   messaging_key_state TEXT NOT NULL,
-  state_ref TEXT NOT NULL DEFAULT '',
   last_error_code TEXT NOT NULL DEFAULT '',
   last_error_message TEXT NOT NULL DEFAULT '',
   last_error_retryable BOOLEAN NOT NULL DEFAULT false,
@@ -61,68 +57,15 @@ CREATE TABLE IF NOT EXISTS wa_client_profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS wa_client_profile_states (
-  client_profile_id TEXT PRIMARY KEY REFERENCES wa_client_profiles(client_profile_id) ON DELETE CASCADE,
-  state_json JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS wa_account_probes (
-  account_probe_id TEXT PRIMARY KEY,
-  wa_account_id TEXT NOT NULL REFERENCES wa_accounts(wa_account_id),
-  client_profile_id TEXT NOT NULL REFERENCES wa_client_profiles(client_profile_id),
-  status TEXT NOT NULL,
-  supported_methods TEXT[] NOT NULL DEFAULT '{}',
-  last_error_code TEXT NOT NULL DEFAULT '',
-  last_error_message TEXT NOT NULL DEFAULT '',
-  last_error_retryable BOOLEAN NOT NULL DEFAULT false,
-  probed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS wa_verification_requests (
-  verification_request_id TEXT PRIMARY KEY,
-  wa_account_id TEXT NOT NULL REFERENCES wa_accounts(wa_account_id),
-  client_profile_id TEXT NOT NULL REFERENCES wa_client_profiles(client_profile_id),
-  delivery_method TEXT NOT NULL,
-  status TEXT NOT NULL,
-  expected_code_length INTEGER NOT NULL DEFAULT 0,
-  retry_after_seconds INTEGER NOT NULL DEFAULT 0,
-  last_error_code TEXT NOT NULL DEFAULT '',
-  last_error_message TEXT NOT NULL DEFAULT '',
-  last_error_retryable BOOLEAN NOT NULL DEFAULT false,
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ
-);
-
-ALTER TABLE wa_verification_requests ADD COLUMN IF NOT EXISTS retry_after_seconds INTEGER NOT NULL DEFAULT 0;
-
-CREATE TABLE IF NOT EXISTS wa_registrations (
-  registration_id TEXT PRIMARY KEY,
-  verification_request_id TEXT NOT NULL REFERENCES wa_verification_requests(verification_request_id),
-  wa_account_id TEXT NOT NULL REFERENCES wa_accounts(wa_account_id),
-  client_profile_id TEXT NOT NULL REFERENCES wa_client_profiles(client_profile_id),
-  status TEXT NOT NULL,
-  registered_identity_id TEXT NOT NULL DEFAULT '',
-  service_account_id TEXT NOT NULL DEFAULT '',
-  service_login_id TEXT NOT NULL DEFAULT '',
-  last_error_code TEXT NOT NULL DEFAULT '',
-  last_error_message TEXT NOT NULL DEFAULT '',
-  last_error_retryable BOOLEAN NOT NULL DEFAULT false,
-  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  completed_at TIMESTAMPTZ
-);
-
 CREATE TABLE IF NOT EXISTS wa_login_states (
   login_state_id TEXT PRIMARY KEY,
-  registration_id TEXT NOT NULL REFERENCES wa_registrations(registration_id),
+  registration_id TEXT NOT NULL,
   wa_account_id TEXT NOT NULL REFERENCES wa_accounts(wa_account_id),
   client_profile_id TEXT NOT NULL REFERENCES wa_client_profiles(client_profile_id),
   registered_identity_id TEXT NOT NULL,
   service_account_id TEXT NOT NULL DEFAULT '',
   service_login_id TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
-  state_ref TEXT NOT NULL DEFAULT '',
   last_error_code TEXT NOT NULL DEFAULT '',
   last_error_message TEXT NOT NULL DEFAULT '',
   last_error_retryable BOOLEAN NOT NULL DEFAULT false,
@@ -170,9 +113,6 @@ CREATE TABLE IF NOT EXISTS wa_inbound_messages (
   last_error_retryable BOOLEAN NOT NULL DEFAULT false,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'ACCOUNT_MESSAGE_DIRECTION_INBOUND';
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'ACCOUNT_MESSAGE_SOURCE_LONG_CONNECTION';
 
 CREATE TABLE IF NOT EXISTS wa_decrypted_messages (
   decrypted_message_id TEXT PRIMARY KEY,
@@ -233,43 +173,6 @@ CREATE TABLE IF NOT EXISTS wa_contacts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-DO $$
-DECLARE
-  wa_table_name TEXT;
-BEGIN
-  FOREACH wa_table_name IN ARRAY ARRAY[
-    'wa_app_artifacts',
-    'wa_protocol_profiles',
-    'wa_accounts',
-    'wa_client_profiles',
-    'wa_client_profile_states',
-    'wa_account_probes',
-    'wa_verification_requests',
-    'wa_registrations',
-    'wa_login_states',
-    'wa_message_sessions',
-    'wa_inbound_messages',
-    'wa_decrypted_messages',
-    'wa_extracted_candidates',
-    'wa_otp_messages',
-    'wa_contacts'
-  ] LOOP
-    IF to_regclass(wa_table_name) IS NOT NULL THEN
-      EXECUTE format('ALTER TABLE %I DROP COLUMN IF EXISTS workspace_id CASCADE', wa_table_name);
-    END IF;
-  END LOOP;
-END $$;
-
-ALTER TABLE wa_decrypted_messages ADD COLUMN IF NOT EXISTS plaintext_value TEXT NOT NULL DEFAULT '';
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS contact_ref TEXT NOT NULL DEFAULT '';
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS provider_message_id TEXT NOT NULL DEFAULT '';
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS provider_timestamp TIMESTAMPTZ;
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS delete_status TEXT NOT NULL DEFAULT 'MESSAGE_DELETE_STATUS_NOT_DELETED';
-ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-ALTER TABLE wa_otp_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
-ALTER TABLE wa_contacts ADD COLUMN IF NOT EXISTS profile_picture_id TEXT NOT NULL DEFAULT '';
-
 CREATE UNIQUE INDEX IF NOT EXISTS wa_accounts_e164_number_key ON wa_accounts (e164_number);
 CREATE UNIQUE INDEX IF NOT EXISTS wa_login_states_registration_id_key ON wa_login_states (registration_id);
 CREATE UNIQUE INDEX IF NOT EXISTS wa_login_states_registered_identity_id_key ON wa_login_states (registered_identity_id);
@@ -281,3 +184,40 @@ CREATE INDEX IF NOT EXISTS wa_inbound_messages_delete_status_idx ON wa_inbound_m
 CREATE INDEX IF NOT EXISTS wa_decrypted_messages_message_decrypted_idx ON wa_decrypted_messages (message_id, decrypted_at DESC, decrypted_message_id DESC);
 CREATE INDEX IF NOT EXISTS wa_contacts_account_updated_idx ON wa_contacts (wa_account_id, updated_at DESC, contact_id DESC);
 CREATE INDEX IF NOT EXISTS wa_contacts_account_jid_idx ON wa_contacts (wa_account_id, jid);
+
+CREATE TABLE IF NOT EXISTS wa_account_credentials (
+ client_profile_id TEXT PRIMARY KEY REFERENCES wa_client_profiles(client_profile_id) ON DELETE CASCADE,
+ credentials BYTEA NOT NULL,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS wa_protocol_states (
+ client_profile_id TEXT PRIMARY KEY REFERENCES wa_client_profiles(client_profile_id) ON DELETE CASCADE,
+ recovery BYTEA NOT NULL,
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS wa_account_acceptances (
+ request_id TEXT PRIMARY KEY,
+ wa_account_id TEXT NOT NULL,
+ receipt BYTEA NOT NULL,
+ accepted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS wa_login_states_one_active_account_idx
+ ON wa_login_states (wa_account_id) WHERE status='LOGIN_STATE_STATUS_ACTIVE';
+CREATE TABLE IF NOT EXISTS wa_message_receipts (
+  wa_account_id TEXT NOT NULL REFERENCES wa_accounts(wa_account_id) ON DELETE CASCADE,
+  provider_message_id TEXT NOT NULL,
+  contact_ref TEXT NOT NULL,
+  recipient_ref TEXT NOT NULL,
+  type INTEGER NOT NULL,
+  timestamp TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (wa_account_id, provider_message_id, contact_ref, recipient_ref, type)
+);
+
+ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS read_receipt_sent_at TIMESTAMPTZ;
+
+ALTER TABLE wa_inbound_messages ADD COLUMN IF NOT EXISTS delivery_receipt_sent_at TIMESTAMPTZ;
+
+ALTER TABLE wa_decrypted_messages ADD COLUMN IF NOT EXISTS content JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS wa_decrypted_messages_change_target_idx ON wa_decrypted_messages ((content->'change'->>'target_provider_message_id'));
+
+ALTER TABLE wa_contacts ADD COLUMN IF NOT EXISTS saved_name TEXT NOT NULL DEFAULT '';

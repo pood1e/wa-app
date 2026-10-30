@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/protocol/v1/account.proto";
+import "byte/v/forge/waapp/v1/account_proxy.proto";
+import "byte/v/forge/waapp/v1/common.proto";
+import "byte/v/forge/waapp/v1/profile.proto";
+import "byte/v/forge/waapp/v1/registration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+service WaAccountAddService {
+  rpc BeginAccountAdd(BeginAccountAddRequest) returns (AccountAddResponse);
+  rpc GetAccountAdd(AccountAddRequest) returns (AccountAddResponse);
+  rpc RequestAccountAddCode(RequestAccountAddCodeRequest) returns (AccountAddResponse);
+  rpc SubmitAccountAddCode(SubmitAccountAddCodeRequest) returns (AccountAddResponse);
+  rpc SubmitAccountAddPassword(SubmitAccountAddPasswordRequest) returns (AccountAddResponse);
+  rpc RefreshAccountAddTransfer(AccountAddRequest) returns (AccountAddResponse);
+  // For an uncertain registration, authenticate retained keys before delivery.
+  rpc DeliverAccountAdd(AccountAddRequest) returns (AccountAddResponse);
+  rpc CancelAccountAdd(AccountAddRequest) returns (AccountAddResponse);
+}
+
+// Internal, authenticated handoff from the adding service to the account runtime.
+service WaAccountAcceptanceService {
+  rpc AcceptAccount(AcceptAccountRequest) returns (AcceptAccountResponse);
+  rpc GetAccountAcceptance(GetAccountAcceptanceRequest) returns (AcceptAccountResponse);
+  // Internal credentials for the adding service; public proxy reads are redacted.
+  rpc ResolveAccountAddProxy(ResolveAccountAddProxyRequest) returns (AccountProxyResponse);
+}
+
+message RegistrationAccountSource {}
+
+message TransferAccountSource {}
+
+message AccountAddSource {
+  oneof method {
+    RegistrationAccountSource registration = 1;
+    TransferAccountSource transfer = 2;
+  }
+}
+
+message BeginAccountAddRequest {
+  RequestContext context = 1;
+  PhoneTarget phone = 2;
+  byte.v.forge.waapp.protocol.v1.ClientPlatform platform = 3;
+  AccountAddSource source = 4;
+  // Omitted: reuse this number's saved proxy, otherwise use the global default.
+  AccountProxy proxy = 5;
+}
+
+message ResolveAccountAddProxyRequest {
+  PhoneTarget phone = 1;
+}
+
+enum AccountAddStatus {
+  ACCOUNT_ADD_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_ADD_STATUS_READY = 1;
+  ACCOUNT_ADD_STATUS_WAITING_CODE = 2;
+  ACCOUNT_ADD_STATUS_READY_TO_DELIVER = 3;
+  ACCOUNT_ADD_STATUS_ACCEPTED = 4;
+  ACCOUNT_ADD_STATUS_CANCELLED = 5;
+  ACCOUNT_ADD_STATUS_EXPIRED = 6;
+  ACCOUNT_ADD_STATUS_OUTCOME_UNKNOWN = 7;
+  ACCOUNT_ADD_STATUS_WAITING_PASSWORD = 8;
+}
+
+message AccountAddPasswordChallenge {
+  google.protobuf.Timestamp next_attempt_at = 1;
+}
+
+message AccountAddFlow {
+  string flow_id = 1;
+  PhoneTarget phone = 2;
+  AccountAddStatus status = 3;
+  AccountProbe probe = 4;
+  VerificationCodeRequestRecord verification = 5;
+  AccountTransferChallenge transfer_challenge = 6;
+  WAAccount account = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  WaError last_error = 9;
+  AccountAddSource source = 10;
+  byte.v.forge.waapp.protocol.v1.ClientPlatform platform = 11;
+  AccountAddPasswordChallenge password_challenge = 12;
+}
+
+message AccountAddRequest {
+  RequestContext context = 1;
+  string flow_id = 2;
+}
+
+message RequestAccountAddCodeRequest {
+  RequestContext context = 1;
+  string flow_id = 2;
+  VerificationDeliveryMethod delivery_method = 3;
+}
+
+message SubmitAccountAddCodeRequest {
+  RequestContext context = 1;
+  string flow_id = 2;
+  string code = 3;
+}
+
+message SubmitAccountAddPasswordRequest {
+  RequestContext context = 1;
+  string flow_id = 2;
+  SensitiveText password = 3;
+}
+
+message AccountAddResponse {
+  AccountAddFlow flow = 1;
+  WaError error = 2;
+}
+
+message AcceptedAccountMaterial {
+  PhoneTarget phone = 1;
+  string service_login_id = 2;
+  string service_account_id = 3;
+  byte.v.forge.waapp.protocol.v1.AccountCredentials credentials = 4;
+  byte.v.forge.waapp.protocol.v1.AccountRecoveryState recovery = 5;
+  AccountProxy proxy = 6;
+}
+
+// context.request_id is stable across retries and is persisted with the result.
+message AcceptAccountRequest {
+  RequestContext context = 1;
+  AcceptedAccountMaterial material = 2;
+}
+
+message GetAccountAcceptanceRequest {
+  RequestContext context = 1;
+  string acceptance_request_id = 2;
+}
+
+message AcceptAccountResponse {
+  WAAccount account = 1;
+  WaError error = 2;
+}
+
+message AccountAcceptanceRecord {
+  bytes material_sha256 = 1;
+  WAAccount account = 2;
+}

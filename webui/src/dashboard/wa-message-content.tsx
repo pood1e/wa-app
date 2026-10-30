@@ -1,32 +1,6 @@
 import { ExternalLink } from 'lucide-react';
-import { normalizeWaMessageText } from './wa-message-rich-text';
-
-const RICH_PREFIXES = [
-  '[商品]',
-  '[模板]',
-  '[模板回复]',
-  '[图片]',
-  '[视频]',
-  '[圆形视频]',
-  '[文件]',
-  '[语音]',
-  '[联系人]',
-  '[位置]',
-  '[实时位置]',
-  '[按钮]',
-  '[按钮回复]',
-  '[互动]',
-  '[互动回复]',
-  '[列表]',
-  '[列表回复]',
-  '[投票]',
-  '[订单]',
-  '[回应]',
-];
-
 export function WaMessageContent({ text }: { text: string }) {
-  const displayText = normalizeWaMessageText(text);
-  return <MessageLines text={stripRichPrefix(displayText)} />;
+  return <MessageLines text={text} />;
 }
 
 function MessageLines({ text }: { text: string }) {
@@ -34,9 +8,9 @@ function MessageLines({ text }: { text: string }) {
   const firstURL = firstLink(lines);
   if (lines.length === 0) return <p className="text-sm text-muted-foreground">空消息</p>;
   return (
-    <div className="space-y-1 text-sm leading-6 text-foreground">
+    <div className="space-y-1 text-[14px] leading-[22px] text-foreground [overflow-wrap:anywhere]">
       {lines.map((line, index) => (
-        <p className="break-words" key={`${index}-${line}`}>
+        <p className="whitespace-pre-wrap break-words" key={`${index}-${line}`}>
           {linkify(line)}
         </p>
       ))}
@@ -51,7 +25,7 @@ function linkify(line: string) {
     if (!/^https?:\/\//.test(token)) return markdownInline(token, `text-${index}`);
     const url = trimLink(token);
     return (
-      <a className="text-emerald-700 underline underline-offset-2" href={url} key={`${index}-${token}`} rel="noreferrer" target="_blank">
+      <a className="text-primary underline underline-offset-2 dark:text-emerald-300" href={url} key={`${index}-${token}`} rel="noreferrer" target="_blank">
         {url}
       </a>
     );
@@ -70,7 +44,7 @@ function markdownInline(text: string, keyPrefix: string) {
 function LinkPreview({ url }: { url: string }) {
   const host = linkHost(url);
   return (
-    <a className="mt-2 flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-card p-3 text-foreground transition hover:bg-accent" href={url} rel="noreferrer" target="_blank">
+    <a className="mt-2 flex max-w-sm items-center gap-3 rounded-md bg-foreground/5 p-3 text-foreground transition hover:bg-foreground/10" href={url} rel="noreferrer" target="_blank">
       <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
         <ExternalLink size={16} />
       </span>
@@ -80,15 +54,6 @@ function LinkPreview({ url }: { url: string }) {
       </span>
     </a>
   );
-}
-
-function stripRichPrefix(text: string) {
-  const value = text.trim();
-  for (const prefix of RICH_PREFIXES) {
-    if (value === prefix) return value;
-    if (value.startsWith(`${prefix} `)) return value.slice(prefix.length).trim();
-  }
-  return text;
 }
 
 function firstLink(lines: string[]) {

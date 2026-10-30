@@ -14,13 +14,14 @@ export function isConnectionTransferredOut(connection?: LongConnectionState) {
   return connection?.status === LongConnectionStatus.LONG_CONNECTION_STATUS_STOPPED && connection?.last_error?.code === WaErrorCode.WA_ERROR_CODE_CONFLICT;
 }
 
-// waAccountDisplayStatus 把账号对外状态派生自「账号生命周期 + 长连接实况」,避免 account.status
-// 与连接实况漂移(连接已停/失效却仍显示“正常”)。非 ACTIVE 生命周期(等待验证码/暂停/归档/已转出)
-// 按其本身展示;ACTIVE 账号则反映连接实况:已连接→正常,启动/重连→连接中,STOPPED+CONFLICT→已转出
-// (被接管),其余(已停止/失败/无连接)→离线。
+export function isConnectionRejected(connection?: LongConnectionState) {
+  return connection?.last_error?.code === WaErrorCode.WA_ERROR_CODE_AUTHENTICATION_FAILED;
+}
+
 export function waAccountDisplayStatus(account: WAAccount, connection?: LongConnectionState): StatusView {
   if (account.status !== WAAccountStatus.WA_ACCOUNT_STATUS_ACTIVE) return waAccountStatusView(account.status);
   if (isConnectionTransferredOut(connection)) return { label: '已转出', variant: 'destructive', tone: 'bad' };
+  if (isConnectionRejected(connection)) return { label: '登录已失效', variant: 'destructive', tone: 'bad' };
   const status = connection?.status;
   if (status === LongConnectionStatus.LONG_CONNECTION_STATUS_CONNECTED || status === LongConnectionStatus.LONG_CONNECTION_STATUS_HEARTBEAT_WAITING) return { label: '正常', variant: 'default', tone: 'ok' };
   if (status === LongConnectionStatus.LONG_CONNECTION_STATUS_RECONNECTING || status === LongConnectionStatus.LONG_CONNECTION_STATUS_STARTING) return { label: '连接中', variant: 'secondary', tone: 'warn' };
@@ -28,17 +29,17 @@ export function waAccountDisplayStatus(account: WAAccount, connection?: LongConn
 }
 
 export function useWaLongConnectionIndex() {
-  const query = useQuery({ queryKey: waKeys.connections(), queryFn: () => getWaConnections(), refetchInterval: 5000 });
+  const query = useQuery({ queryKey: waKeys.connections(), queryFn: ({ signal }) => getWaConnections({}, signal), refetchInterval: 5000 });
   const byAccount = useMemo(() => indexConnections(query.data?.connections || []), [query.data?.connections]);
   return { byAccount, loading: query.isLoading };
 }
 
 export function WaLongConnectionBadge({ connection, loading }: { connection?: LongConnectionState; loading?: boolean }) {
-  const view = statusView(connection?.status, loading, isConnectionTransferredOut(connection));
+  const view = isConnectionRejected(connection) ? { label: '登录已失效', variant: 'destructive' as const } : statusView(connection?.status, loading, isConnectionTransferredOut(connection));
   return <Badge variant={view.variant}>长连接：{view.label}</Badge>;
 }
 
-function indexConnections(connections: LongConnectionState[]) {
+export function indexConnections(connections: LongConnectionState[]) {
   return connections.reduce((acc, connection) => {
     if (!connection.wa_account_id) return acc;
     acc.set(connection.wa_account_id, betterConnection(acc.get(connection.wa_account_id), connection));
@@ -48,7 +49,17 @@ function indexConnections(connections: LongConnectionState[]) {
 
 function betterConnection(current: LongConnectionState | undefined, next: LongConnectionState) {
   if (!current) return next;
-  return statusRank(next.status) < statusRank(current.status) ? next : current;
+  const nextRank = statusRank(next.status);
+  const currentRank = statusRank(current.status);
+  if (nextRank !== currentRank) return nextRank < currentRank ? next : current;
+  const nextTime = connectionTime(next);
+  const currentTime = connectionTime(current);
+  if (nextTime !== currentTime) return nextTime > currentTime ? next : current;
+  return next.last_error && !current.last_error ? next : current;
+}
+
+function connectionTime(connection: LongConnectionState) {
+  return Math.max(...[connection.started_at, connection.last_connected_at, connection.last_heartbeat_at].map((value) => Date.parse(value || '') || 0));
 }
 
 function statusView(status: LongConnectionStatus | undefined, loading?: boolean, transferredOut?: boolean): { label: string; variant: BadgeVariant } {

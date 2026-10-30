@@ -5,7 +5,7 @@ package byte.v.forge.waapp.v1;
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppCommonProto";
 option java_package = "com.bytevforge.waapp.v1";
@@ -35,6 +35,8 @@ enum WaErrorCode {
   WA_ERROR_CODE_DECRYPTION_FAILED = 13;
   WA_ERROR_CODE_UNSUPPORTED_OPERATION = 14;
   WA_ERROR_CODE_INTERNAL = 15;
+  WA_ERROR_CODE_AUTHENTICATION_FAILED = 16;
+  WA_ERROR_CODE_VERIFICATION_REQUIRED = 17;
 }
 
 message WaError {

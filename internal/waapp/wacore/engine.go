@@ -4,18 +4,13 @@ import (
 	"context"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"go.mau.fi/whatsmeow/proto/waE2E"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 )
 
-// ProtocolEngine is the port the RPC/BFF layers depend on to drive the native
-// WhatsApp protocol. Its inputs and results are the DTOs defined below; the
-// concrete engine implementation lives in the engine layer.
-type ProtocolEngine interface {
-	PrepareClientProfile(context.Context, EngineProfileInput) error
-	ProbeAccount(context.Context, EngineRegistrationInput) EngineProbeResult
-	RequestVerificationCode(context.Context, EngineRegistrationInput) EngineCodeResult
-	RefreshAccountTransferChallenge(context.Context, EngineAccountTransferChallengeInput) EngineAccountTransferChallengeResult
-	SubmitVerificationCode(context.Context, EngineSubmitInput) EngineRegisterResult
+// Communication exposes account operation protocols without device preparation.
+type Communication interface {
 	CheckLoginState(context.Context, EngineLoginCheckInput) EngineLoginCheckResult
 	ReceiveMessageBatch(context.Context, EngineMessageInput) EngineMessageBatchResult
 	DecryptMessage(context.Context, EngineDecryptInput) EngineDecryptResult
@@ -38,7 +33,6 @@ type EngineRegistrationInput struct {
 	Phone             *waappv1.PhoneTarget
 	DeliveryMethod    waappv1.VerificationDeliveryMethod
 	AuthCodeContext   string
-	IntegrityMode     IntegrityMode
 }
 
 type EngineSubmitInput struct {
@@ -88,7 +82,7 @@ type EngineAccountSettingsInput struct {
 	LoginStateID         string
 	AppVersion           string
 	Kind                 waappv1.AccountSettingsOperationKind
-	Pin                  string
+	Password             string
 	EmailAddress         string
 	GoogleIDToken        string
 	LocaleLanguage       string
@@ -158,12 +152,15 @@ type EngineAccountTransferChallengeResult struct {
 }
 
 type EngineRegisterResult struct {
-	Status           waappv1.RegistrationStatus
-	RegisteredID     string
-	ServiceAccountID string
-	ServiceLoginID   string
-	CompletedAt      time.Time
-	Err              error
+	PasswordChallenge *waappv1.AccountAddPasswordChallenge
+	OutcomeUnknown    bool
+	Status            waappv1.RegistrationStatus
+	RetryAfter        time.Duration
+	RegisteredID      string
+	ServiceAccountID  string
+	ServiceLoginID    string
+	CompletedAt       time.Time
+	Err               error
 }
 
 type EngineLoginCheckResult struct {
@@ -171,38 +168,39 @@ type EngineLoginCheckResult struct {
 	Err    error
 }
 
-type EngineMessageReadReceiptInput struct {
+type EngineMessageReceiptInput struct {
 	WAAccountID          string
 	ClientProfileID      string
 	RegisteredIdentityID string
 	AppVersion           string
-	Messages             []EngineMessageReadReceipt
+	Messages             []EngineMessageReceipt
 	RemoteTimeout        time.Duration
+	Type                 waappv1.MessageReceiptType
 }
 
-type EngineMessageReadReceipt struct {
+type EngineMessageReceipt struct {
 	ChatJID           string
 	ParticipantJID    string
 	ProviderMessageID string
 }
 
-type EngineMessageReadReceiptResult struct {
+type EngineMessageReceiptResult struct {
 	Sent int
 	Err  error
 }
 
-type EngineTextMessageInput struct {
+type EngineMessageSendInput struct {
 	WAAccountID          string
 	ClientProfileID      string
 	RegisteredIdentityID string
 	AppVersion           string
 	ContactJID           string
-	Text                 string
+	Message              *waE2E.Message
 	ClientMessageID      string
 	RemoteTimeout        time.Duration
 }
 
-type EngineTextMessageResult struct {
+type EngineMessageSendResult struct {
 	ProviderMessageID string
 	SentAt            time.Time
 	AckStatus         waappv1.MessageAckStatus
@@ -214,6 +212,8 @@ type EngineMessageBatchResult struct {
 	Contacts      []*waappv1.WAContact
 	OTPMessages   []*waappv1.OtpMessage
 	AccountLogout *EngineAccountLogout
+	Receipts      []*waappv1.MessageReceipt
+	Presences     []*waappv1.WAContactPresence
 	Err           error
 }
 
@@ -227,6 +227,7 @@ type EngineAccountLogout struct {
 
 type EngineDecryptResult struct {
 	DecryptedMessage *waappv1.DecryptedMessage
+	MessageKind      waappv1.InboundMessageKind
 	Candidates       []*waappv1.ExtractedCandidate
 	ContactHints     []WAContactHint
 	Err              error

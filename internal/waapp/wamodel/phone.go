@@ -3,7 +3,7 @@ package wamodel
 import (
 	"strings"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 )
 
 func NormalizePhone(phone *waappv1.PhoneTarget) *waappv1.PhoneTarget {

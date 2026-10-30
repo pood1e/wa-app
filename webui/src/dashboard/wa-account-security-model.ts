@@ -3,6 +3,11 @@ import type { GetTwoFactorAuthStatusResponse, TwoFactorAuthStatus } from '../pro
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
+export function isAccountPassword(value: string) {
+  const units = value.split('');
+  return value.length >= 8 && value.length <= 20 && units.some((unit) => /\p{L}/u.test(unit)) && units.some((unit) => /\p{Nd}/u.test(unit));
+}
+
 export type TwoFactorStatusView = { isFetching: boolean; isError: boolean; data?: { status?: TwoFactorAuthStatus } };
 
 export function initialTwoFactorStatus(status?: TwoFactorAuthStatus): GetTwoFactorAuthStatusResponse {
@@ -10,8 +15,7 @@ export function initialTwoFactorStatus(status?: TwoFactorAuthStatus): GetTwoFact
 }
 
 export function shouldCollectEmailOtpAfterSet(status?: AccountSettingsOperationStatus) {
-  return status !== AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_VERIFIED
-    && status !== AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_REJECTED;
+  return status === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_NEEDS_VERIFICATION;
 }
 
 export function shouldShowEmailOtp(status?: AccountSettingsOperationStatus) {

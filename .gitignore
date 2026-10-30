@@ -10,6 +10,7 @@
 .venv*/
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 node_modules/
 dist/
 build/
@@ -17,3 +18,10 @@ coverage/
 .wrangler/
 /gen/
 /webui/src/proto/
+
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm

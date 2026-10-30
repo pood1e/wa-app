@@ -3,11 +3,12 @@ syntax = "proto3";
 package byte.v.forge.waapp.v1;
 
 import "byte/v/forge/waapp/v1/common.proto";
+import "byte/v/forge/waapp/v1/message_content.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppMessagingProto";
 option java_package = "com.bytevforge.waapp.v1";
@@ -22,6 +23,8 @@ service WaMessagingService {
   rpc MarkAccountMessagesRead(MarkAccountMessagesReadRequest) returns (MarkAccountMessagesReadResponse);
   rpc DeleteAccountMessages(DeleteAccountMessagesRequest) returns (DeleteAccountMessagesResponse);
   rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse);
+  rpc EditAccountMessage(EditAccountMessageRequest) returns (SendTextMessageResponse);
+  rpc ReactToAccountMessage(ReactToAccountMessageRequest) returns (SendTextMessageResponse);
   rpc AcknowledgeMessage(AcknowledgeMessageRequest) returns (AcknowledgeMessageResponse);
   rpc CloseMessageSession(CloseMessageSessionRequest) returns (CloseMessageSessionResponse);
 }
@@ -63,6 +66,21 @@ enum MessageDeleteStatus {
   MESSAGE_DELETE_STATUS_UNSPECIFIED = 0;
   MESSAGE_DELETE_STATUS_NOT_DELETED = 1;
   MESSAGE_DELETE_STATUS_DELETED_FOR_ME = 2;
+}
+
+enum MessageReceiptType {
+  MESSAGE_RECEIPT_TYPE_UNSPECIFIED = 0;
+  MESSAGE_RECEIPT_TYPE_DELIVERED = 1;
+  MESSAGE_RECEIPT_TYPE_READ = 2;
+  MESSAGE_RECEIPT_TYPE_PLAYED = 3;
+}
+
+message MessageReceipt {
+  string provider_message_id = 1;
+  string contact_ref = 2;
+  string recipient_ref = 3;
+  MessageReceiptType type = 4;
+  google.protobuf.Timestamp timestamp = 5;
 }
 
 enum AccountMessageDeleteMode {
@@ -126,6 +144,8 @@ message InboundMessage {
   google.protobuf.Timestamp deleted_at = 15;
   AccountMessageDirection direction = 16;
   AccountMessageSource source = 17;
+  google.protobuf.Timestamp read_receipt_sent_at = 18;
+  google.protobuf.Timestamp delivery_receipt_sent_at = 19;
 }
 
 message AccountMessage {
@@ -145,6 +165,13 @@ message AccountMessage {
   google.protobuf.Timestamp read_at = 14;
   MessageDeleteStatus delete_status = 15;
   google.protobuf.Timestamp deleted_at = 16;
+  string provider_message_id = 17;
+  repeated MessageReceipt receipts = 18;
+  google.protobuf.Timestamp read_receipt_sent_at = 19;
+  MessageContent content = 20;
+  google.protobuf.Timestamp edited_at = 21;
+  google.protobuf.Timestamp revoked_at = 22;
+  repeated MessageReaction reactions = 23;
 }
 
 message LongConnectionState {
@@ -259,6 +286,24 @@ message SendTextMessageRequest {
   string wa_account_id = 2;
   string contact_ref = 3;
   SensitiveText text = 4;
+  string client_message_id = 5;
+  string reply_to_account_message_id = 6;
+}
+
+message EditAccountMessageRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string account_message_id = 3;
+  SensitiveText text = 4;
+  string client_message_id = 5;
+}
+
+message ReactToAccountMessageRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string account_message_id = 3;
+  // Empty text removes the sender's existing reaction.
+  string text = 4;
   string client_message_id = 5;
 }
 

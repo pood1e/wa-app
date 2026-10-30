@@ -11,6 +11,7 @@ export function waAccountStatusView(status?: WAAccountStatus): StatusView {
     case WAAccountStatus.WA_ACCOUNT_STATUS_PAUSED: return { label: '已暂停', variant: 'outline', tone: 'idle' };
     case WAAccountStatus.WA_ACCOUNT_STATUS_ARCHIVED: return { label: '已归档', variant: 'outline', tone: 'idle' };
     case WAAccountStatus.WA_ACCOUNT_STATUS_TRANSFERRED_OUT: return { label: '已转出', variant: 'destructive', tone: 'bad' };
+    case WAAccountStatus.WA_ACCOUNT_STATUS_LOGGED_OUT: return { label: '已退出登录', variant: 'outline', tone: 'idle' };
     default: return { label: '状态未知', variant: 'outline', tone: 'idle' };
   }
 }

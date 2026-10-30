@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 )
 
 type Clock interface{ Now() time.Time }
@@ -62,6 +63,9 @@ func ToProtoError(err error) *waappv1.WaError {
 	}
 	var appErr *AppError
 	if errors.As(err, &appErr) {
+		if appErr == nil {
+			return nil
+		}
 		return &waappv1.WaError{Code: appErr.Code, Message: appErr.Message, Retryable: appErr.Retryable}
 	}
 	return &waappv1.WaError{
@@ -71,16 +75,11 @@ func ToProtoError(err error) *waappv1.WaError {
 	}
 }
 
-func ErrorFromProto(err *waappv1.WaError) *AppError {
+func ErrorFromProto(err *waappv1.WaError) error {
 	if err == nil || err.GetCode() == waappv1.WaErrorCode_WA_ERROR_CODE_UNSPECIFIED {
 		return nil
 	}
 	return NewError(err.GetCode(), err.GetMessage(), err.GetRetryable())
-}
-
-func ValidateContext(ctx *waappv1.RequestContext) error {
-	_ = ctx
-	return nil
 }
 
 func ProtoTimestamp(t time.Time) *timestamppb.Timestamp {
@@ -261,4 +260,11 @@ func SafeInternalErrorMessage(err error) string {
 		return string([]rune(message)[:maxErrorMessageLength]) + "..."
 	}
 	return message
+}
+
+func RequireRequestID(id string) error {
+	if strings.TrimSpace(id) == "" || len(id) > 96 {
+		return NewError(waappv1.WaErrorCode_WA_ERROR_CODE_VALIDATION_FAILED, "request ID is required and must be at most 96 bytes", false)
+	}
+	return nil
 }

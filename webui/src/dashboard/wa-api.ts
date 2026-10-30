@@ -1,35 +1,48 @@
 import type { GetTwoFactorAuthStatusResponse, RemoveAccountProfilePictureResponse, RequestAccountEmailOtpResponse, SetAccountEmailResponse, SetAccountProfileNameResponse, SetAccountProfilePictureResponse, SetTwoFactorAuthSettingsResponse, VerifyAccountEmailOtpResponse } from '../proto/byte/v/forge/waapp/v1/account_settings';
-import type { DeleteWAContactResponse, ListWAContactsResponse, ResolveWAContactsResponse } from '../proto/byte/v/forge/waapp/v1/contacts';
+import type { AccountReviewResponse, SubmitAccountReviewRequest } from '../proto/byte/v/forge/waapp/v1/account_review';
+import type { AccountProxy, AccountProxyResponse } from '../proto/byte/v/forge/waapp/v1/account_proxy';
+import type { DeleteWAContactResponse, ListWAContactsResponse, ResolveWAContactsResponse, SaveWAContactRequest, SaveWAContactResponse, SubscribeWAContactPresenceResponse } from '../proto/byte/v/forge/waapp/v1/contacts';
+import type { GroupResponse } from '../proto/byte/v/forge/waapp/v1/groups';
 import type { ListAccountOtpMessagesResponse } from '../proto/byte/v/forge/waapp/v1/extraction';
-import type { DeleteAccountMessagesResponse, GetLongConnectionStatusResponse, ListAccountMessagesResponse, LongConnectionState, MarkAccountMessagesReadResponse, SendTextMessageResponse } from '../proto/byte/v/forge/waapp/v1/messaging';
-import type { DeletePendingRegistrationWAAccountsResponse, DeleteWAAccountResponse, ListClientProfilesResponse, ListWAAccountsResponse, WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
-import type { VerificationDeliveryMethod } from '../proto/byte/v/forge/waapp/v1/registration';
-import type { WaIntegrityMode } from './wa-integrity';
+import type { DeleteAccountMessagesResponse, GetLongConnectionStatusResponse, ListAccountMessagesResponse, LongConnectionState, MarkAccountMessagesReadResponse, SendTextMessageResponse, EditAccountMessageRequest, ReactToAccountMessageRequest } from '../proto/byte/v/forge/waapp/v1/messaging';
+import type { DeleteWAAccountResponse, ListWAAccountsResponse, LogoutWAAccountRequest, LogoutWAAccountResponse, WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 
 export const ACCOUNT_PAGE_SIZE = 100;
 
-export type WaPhoneInput = { region: string; phone: string; e164_number: string; country_calling_code: string; country_iso2: string };
-export type WaWorkflowResponse = { success?: boolean; passed?: boolean; request_failed?: boolean; retry_after_seconds?: number; status?: string; error_message?: string; reject_reason?: string; wa_account_id?: string; client_profile_id?: string; protocol_profile_id?: string; verification_request_id?: string; delivery_method?: string; method?: string; registration_phase?: string; method_statuses?: unknown[]; phone_status?: Record<string, unknown>; account_probe?: Record<string, unknown>; sms_probe?: Record<string, unknown>; phone?: Record<string, unknown>; proxy?: Record<string, unknown>; verification_request?: Record<string, unknown>; account_transfer_challenge?: Record<string, unknown>; registration?: Record<string, unknown>; login_state?: Record<string, unknown>; check?: Record<string, unknown> };
 export type WaConnectionState = LongConnectionState;
 export type WaConnectionFilters = { login_state_id?: string; wa_account_id?: string; client_profile_id?: string; registered_identity_id?: string };
 export type WaAccountProjection = WAAccount;
 
 export const waKeys = {
   accounts: () => ['wa', 'accounts'] as const,
-  profiles: (waAccountId: string) => ['wa', 'profiles', waAccountId] as const,
+  review: (waAccountId: string) => ['wa', 'review', waAccountId] as const,
+  proxy: (waAccountId: string) => ['wa', 'proxy', waAccountId] as const,
   messages: (waAccountId: string, contactRef = '') => ['wa', 'messages', waAccountId, contactRef] as const,
   contacts: (waAccountId: string) => ['wa', 'contacts', waAccountId] as const,
   contactResolve: (waAccountId: string) => ['wa', 'contacts', 'resolve', waAccountId] as const,
+  presence: (waAccountId: string, contact: string) => ['wa', 'presence', waAccountId, contact] as const,
+  group: (waAccountId: string, contact: string) => ['wa', 'group', waAccountId, contact] as const,
+  groupRequests: (waAccountId: string, contact: string) => ['wa', 'group-requests', waAccountId, contact] as const,
   twoFactorStatus: (waAccountId: string) => ['wa', '2fa-status', waAccountId] as const,
   otpMessages: (waAccountId: string) => ['wa', 'otp-messages', waAccountId] as const,
   connections: (filters: WaConnectionFilters = {}) => ['wa', 'connections', filters.login_state_id || '', filters.wa_account_id || '', filters.client_profile_id || '', filters.registered_identity_id || ''] as const,
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(path, { ...init, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
-  if (resp.status === 401) redirectToLogin();
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json() as Promise<T>;
+  const method = init?.method?.toUpperCase() || 'GET';
+  const timeout = AbortSignal.timeout(method === 'GET' || method === 'HEAD' ? 10_000 : 100_000);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+  try {
+    const resp = await fetch(path, { ...init, signal, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
+    if (resp.status === 401) redirectToLogin();
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json() as T;
+  } catch (error) {
+    if (init?.signal?.aborted) throw error;
+    if (timeout.aborted) throw new Error('连接服务超时，请检查网络后重试', { cause: error });
+    if (error instanceof TypeError) throw new Error('无法连接服务，请检查网络后重试', { cause: error });
+    throw error;
+  }
 }
 
 function redirectToLogin() {
@@ -37,32 +50,35 @@ function redirectToLogin() {
   window.location.assign(`/login?next=${encodeURIComponent(next || '/')}`);
 }
 
-export function getWaConnections(filters: WaConnectionFilters = {}) {
+export function getWaConnections(filters: WaConnectionFilters = {}, signal?: AbortSignal) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
-  return getWaResponse<GetLongConnectionStatusResponse>(`/api/wa/long-connections${params.size ? `?${params}` : ''}`);
+  return getWaResponse<GetLongConnectionStatusResponse>(`/api/wa/long-connections${params.size ? `?${params}` : ''}`, signal);
 }
 
-export async function getWaAccounts(cursor = '') {
+export function getWaAccountProxy(accountID: string, signal?: AbortSignal) {
+  return getWaResponse<AccountProxyResponse>(`/api/wa/accounts/${encodeURIComponent(accountID)}/proxy`, signal);
+}
+
+export function setWaAccountProxy(accountID: string, proxy: AccountProxy | undefined) {
+  return mutateWaResponse<AccountProxyResponse>(`/api/wa/accounts/${encodeURIComponent(accountID)}/proxy`, { method: 'PUT', body: JSON.stringify({ proxy }) });
+}
+
+export async function getWaAccounts(cursor = '', signal?: AbortSignal) {
   const params = new URLSearchParams({ limit: String(ACCOUNT_PAGE_SIZE) });
   if (cursor) params.set('cursor', cursor);
-  const response = await getWaResponse<ListWAAccountsResponse>(`/api/wa/accounts?${params}`);
+  const response = await getWaResponse<ListWAAccountsResponse>(`/api/wa/accounts?${params}`, signal);
   const accounts = Array.isArray(response.accounts) ? response.accounts.filter((account): account is WAAccount => Boolean(account)) : [];
   return { ...response, accounts };
 }
 
-export function getWaAccountOtpMessages(waAccountId: string, options: { cursor?: string; limit?: number; includeSensitiveValues?: boolean } = {}) {
+export function getWaAccountOtpMessages(waAccountId: string, options: { cursor?: string; limit?: number; includeSensitiveValues?: boolean; signal?: AbortSignal } = {}) {
   const params = new URLSearchParams({ wa_account_id: waAccountId, limit: String(options.limit || 20) });
   if (options.cursor) params.set('cursor', options.cursor);
   if (options.includeSensitiveValues !== undefined) params.set('include_sensitive_values', String(options.includeSensitiveValues));
-  return getWaResponse<ListAccountOtpMessagesResponse>(`/api/wa/account-otp-messages?${params}`);
+  return getWaResponse<ListAccountOtpMessagesResponse>(`/api/wa/account-otp-messages?${params}`, options.signal);
 }
 
-export function getWaClientProfiles(waAccountId: string, cursor = '') {
-  const params = new URLSearchParams({ wa_account_id: waAccountId, limit: '20' });
-  if (cursor) params.set('cursor', cursor);
-  return getWaResponse<ListClientProfilesResponse>(`/api/wa/client-profiles?${params}`);
-}
 
 export type MarkWaMessagesReadInput = { accountMessageIds?: string[]; contactRef?: string; localOnly?: boolean };
 
@@ -74,24 +90,51 @@ export function deleteWaMessagesForMe(waAccountId: string, accountMessageIds: st
   return mutateWaResponse<DeleteAccountMessagesResponse>('/api/wa/messages/delete', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, account_message_ids: accountMessageIds, mode: 'for_me' }) });
 }
 
-export function sendWaTextMessage(waAccountId: string, contactRef: string, text: string) {
-  return mutateWaResponse<SendTextMessageResponse>('/api/wa/messages/send', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, contact_ref: contactRef, text }) });
+export function sendWaTextMessage(waAccountId: string, contactRef: string, text: string, replyTo = '') {
+  return mutateWaResponse<SendTextMessageResponse>('/api/wa/messages/send', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, contact_ref: contactRef, text, reply_to_account_message_id: replyTo }) });
 }
 
-export function getWaMessages(waAccountId: string, contactRef: string, cursor = '') {
+export function editWaMessage(waAccountId: string, messageID: string, text: string) {
+  const request: EditAccountMessageRequest = { context: undefined, wa_account_id: waAccountId, account_message_id: messageID, text: { value: text, redacted_value: '', secret_ref: '' }, client_message_id: '' };
+  return mutateWaResponse<SendTextMessageResponse>('/api/wa/messages/edit', { method: 'POST', body: JSON.stringify(request) });
+}
+
+export function reactToWaMessage(waAccountId: string, messageID: string, text: string) {
+  const request: ReactToAccountMessageRequest = { context: undefined, wa_account_id: waAccountId, account_message_id: messageID, text, client_message_id: '' };
+  return mutateWaResponse<SendTextMessageResponse>('/api/wa/messages/react', { method: 'POST', body: JSON.stringify(request) });
+}
+
+export function revokeWaMessage(waAccountId: string, messageID: string) {
+  return mutateWaResponse<DeleteAccountMessagesResponse>('/api/wa/messages/delete', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, account_message_ids: [messageID], mode: 'for_everyone' }) });
+}
+
+export function getWaMessages(waAccountId: string, contactRef: string, cursor = '', signal?: AbortSignal) {
   const params = new URLSearchParams({ wa_account_id: waAccountId, contact_ref: contactRef, limit: '100', include_sensitive_text: 'true' });
   if (cursor) params.set('cursor', cursor);
-  return getWaResponse<ListAccountMessagesResponse>(`/api/wa/messages?${params}`);
+  return getWaResponse<ListAccountMessagesResponse>(`/api/wa/messages?${params}`, signal);
 }
 
-export function getWaContacts(waAccountId: string, cursor = '') {
+export function getWaContacts(waAccountId: string, cursor = '', signal?: AbortSignal) {
   const params = new URLSearchParams({ wa_account_id: waAccountId, limit: '500' });
   if (cursor) params.set('cursor', cursor);
-  return getWaResponse<ListWAContactsResponse>(`/api/wa/contacts?${params}`);
+  return getWaResponse<ListWAContactsResponse>(`/api/wa/contacts?${params}`, signal);
 }
 
-export function resolveWaContacts(waAccountId: string, jids: string[]) {
-  return mutateWaResponse<ResolveWAContactsResponse>('/api/wa/contacts/resolve', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, jids, limit: jids.length }) });
+export function resolveWaContacts(waAccountId: string, jids: string[], signal?: AbortSignal) {
+  return mutateWaResponse<ResolveWAContactsResponse>('/api/wa/contacts/resolve', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, jids, limit: jids.length }), signal });
+}
+
+export function saveWaContact(request: SaveWAContactRequest, signal?: AbortSignal) {
+  return mutateWaResponse<SaveWAContactResponse>('/api/wa/contacts', { method: 'POST', body: JSON.stringify(request), signal });
+}
+
+export function subscribeWaPresence(waAccountId: string, contactRef: string, signal?: AbortSignal) {
+  return api<SubscribeWAContactPresenceResponse>('/api/wa/contacts/presence', { method: 'POST', body: JSON.stringify({ wa_account_id: waAccountId, contact_ref: contactRef }), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) });
+}
+
+export function getWaGroup(waAccountId: string, groupRef: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ wa_account_id: waAccountId, group_ref: groupRef });
+  return getWaResponse<GroupResponse>(`/api/wa/groups?${params}`, signal);
 }
 
 export function deleteWaContact(waAccountId: string, contactID: string) {
@@ -107,35 +150,37 @@ export async function deleteWaAccount(account: WAAccount | string) {
   return resp;
 }
 
-export async function cleanupPendingRegistrationWaAccounts() {
-  return mutateWaResponse<DeletePendingRegistrationWAAccountsResponse>('/api/wa/accounts/cleanup-pending-registration', { method: 'POST' });
+export function logoutWaAccount(account: WAAccount) {
+  const request: LogoutWAAccountRequest = { context: undefined, wa_account_id: waAccountID(account) };
+  return mutateWaResponse<LogoutWAAccountResponse>(`/api/wa/accounts/${encodeURIComponent(request.wa_account_id)}/logout`, { method: 'POST', body: JSON.stringify(request) });
 }
 
-export const probeWaPhoneSMS = (input: WaPhoneInput) => api<WaWorkflowResponse>('/api/wa/phone/sms-probe', { method: 'POST', body: JSON.stringify(input) });
-export const registerWaPhone = (input: WaPhoneInput, deliveryMethod: VerificationDeliveryMethod, integrityMode?: WaIntegrityMode) => api<WaWorkflowResponse>('/api/wa/register', { method: 'POST', body: JSON.stringify({ ...input, delivery_method: deliveryMethod, ...(integrityMode ? { integrity_mode: integrityMode } : {}) }) });
-export const checkWaLoginState = (input: { login_state_id?: string; registered_identity_id?: string; wa_account_id?: string; client_profile_id?: string; remote_timeout_seconds?: number }) => api<WaWorkflowResponse>('/api/wa/login-state-check', { method: 'POST', body: JSON.stringify(input) });
+export function getWaAccountReview(accountID: string, signal?: AbortSignal) {
+  return getWaResponse<AccountReviewResponse>(`/api/wa/accounts/${encodeURIComponent(accountID)}/review`, signal);
+}
 
-export async function getWaTwoFactorAuthStatus(account: WAAccount, input: { remoteRefresh?: boolean } = {}) {
+export function refreshWaAccountReview(accountID: string) {
+  return mutateWaResponse<AccountReviewResponse>(`/api/wa/accounts/${encodeURIComponent(accountID)}/review/refresh`, { method: 'POST' });
+}
+
+export function submitWaAccountReview(accountID: string, description: string) {
+  const request: SubmitAccountReviewRequest = { context: undefined, wa_account_id: accountID, description: { value: description, redacted_value: '', secret_ref: '' } };
+  return mutateWaResponse<AccountReviewResponse>(`/api/wa/accounts/${encodeURIComponent(accountID)}/review`, { method: 'POST', body: JSON.stringify(request) });
+}
+
+
+
+export async function getWaTwoFactorAuthStatus(account: WAAccount, input: { remoteRefresh?: boolean; signal?: AbortSignal } = {}) {
   const accountID = waAccountID(account);
   if (!accountID) throw new Error('wa_account_id is required');
   const params = new URLSearchParams({ wa_account_id: accountID });
   if (input.remoteRefresh) params.set('remote_refresh', 'true');
-  return requireAccountSettingsResponse(await api<GetTwoFactorAuthStatusResponse>(`/api/wa/account-settings/2fa/status?${params}`));
+  return requireAccountSettingsResponse(await api<GetTwoFactorAuthStatusResponse>(`/api/wa/account-settings/2fa/status?${params}`, { signal: input.signal }));
 }
 
-export function submitWaRegistrationOTP(account: WAAccount | string, otp: string) {
-  const accountID = typeof account === 'string' ? account : waAccountID(account);
-  return api<WaWorkflowResponse>('/api/wa/actions/registration/resume-otp', { method: 'POST', body: JSON.stringify({ wa_account_id: accountID, otp }) });
-}
-export function refreshWaAccountTransferChallenge(verificationRequestID: string) {
-  return api<WaWorkflowResponse>('/api/wa/actions/registration/account-transfer/refresh', { method: 'POST', body: JSON.stringify({ verification_request_id: verificationRequestID }) });
-}
-export function pollWaAccountTransferRegistration(verificationRequestID: string, waAccountID = '', maxAttempts = 1) {
-  return api<WaWorkflowResponse>('/api/wa/actions/registration/account-transfer/poll', { method: 'POST', body: JSON.stringify({ verification_request_id: verificationRequestID, wa_account_id: waAccountID, max_attempts: maxAttempts }) });
-}
 
-export async function setWaTwoFactorAuthSettings(account: WAAccount, pin: string) {
-  return requireAccountSettingsResponse(await api<SetTwoFactorAuthSettingsResponse>('/api/wa/account-settings/2fa', { method: 'POST', body: JSON.stringify({ ...waAccountSettingsPayload(account), pin }) }));
+export async function setWaTwoFactorAuthSettings(account: WAAccount, password: string) {
+  return requireAccountSettingsResponse(await api<SetTwoFactorAuthSettingsResponse>('/api/wa/account-settings/2fa', { method: 'POST', body: JSON.stringify({ ...waAccountSettingsPayload(account), password }) }));
 }
 export async function setWaAccountEmail(account: WAAccount, input: { email_address: string; google_id_token?: string }) {
   return requireAccountSettingsResponse(await api<SetAccountEmailResponse>('/api/wa/account-settings/email', { method: 'POST', body: JSON.stringify({ ...waAccountSettingsPayload(account), email_address: input.email_address, google_id_token: input.google_id_token || '' }) }));
@@ -178,10 +223,10 @@ function requireAccountSettingsResponse<T extends { error?: { message?: string }
   if (message) throw new Error(message);
   return resp;
 }
-function getWaResponse<T extends { error?: { message?: string } }>(path: string) {
-  return api<T>(path).then(requireWaResponse);
+export function getWaResponse<T extends { error?: { message?: string } }>(path: string, signal?: AbortSignal) {
+  return api<T>(path, { signal }).then(requireWaResponse);
 }
-function mutateWaResponse<T extends { error?: { message?: string } }>(path: string, init: RequestInit) {
+export function mutateWaResponse<T extends { error?: { message?: string } }>(path: string, init: RequestInit) {
   return api<T>(path, init).then(requireWaResponse);
 }
 function requireWaResponse<T extends { error?: { message?: string } }>(resp: T) {

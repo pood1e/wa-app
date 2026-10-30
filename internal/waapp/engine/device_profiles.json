@@ -1,9 +1,0 @@
-{
-  "_comment": "注册设备画像池。约束:池中 android 版本必须与真机 integrity token 泄露的 deviceAttributes.sdkVersion 一致——真机是 Android 10(token 报 sdkVersion=29,PIF/TrickyStore 现改不动它),故池中放 Android 10 机型,避免'声称现代机型 + token 报 A10'的矛盾(仅在 WA 开启 deviceAttributes 比对时才致命,但对齐零成本)。机型无需与真机型号相同(token 不泄露真机 model,只泄露 sdkVersion),选常见、认证、能稳过 STRONG 的 Android 10 机即可(认证机默认过 STRONG,故'普通机型 + STRONG token'自洽)。每号的实例指纹(FDID/android_id/serial 等)由 buildNativePhoneProfile 每号随机,机型固定/小池即可。字段:vendor=Build.MANUFACTURER, model=Build.MODEL, android=Build.VERSION.RELEASE, build_display_id=Build.DISPLAY(代表值,按实测真机校正最佳), min/max_ram_gib=ActivityManager.totalMem(GiB)。运行时用 WA_APP_DEVICE_PROFILES_FILE 覆盖(挂 ConfigMap 免重建镜像)。",
-  "registration_profiles": [
-    { "vendor": "Xiaomi",  "model": "M1908C3JG",  "android": "10", "build_display_id": "M1908C3JG_V12.0.2.0(CN01)",   "min_ram_gib": 4.0, "max_ram_gib": 6.0 },
-    { "vendor": "samsung", "model": "SM-A515F",   "android": "10", "build_display_id": "SM-A515F_QP1A.190711(EUX1)",  "min_ram_gib": 4.0, "max_ram_gib": 6.0 },
-    { "vendor": "Redmi",   "model": "M2003J15SC", "android": "10", "build_display_id": "M2003J15SC_V12.0.1.0(CN01)",  "min_ram_gib": 4.0, "max_ram_gib": 6.0 },
-    { "vendor": "OPPO",    "model": "CPH2015",    "android": "10", "build_display_id": "CPH2015_7.2.1(EX01)",         "min_ram_gib": 4.0, "max_ram_gib": 8.0 }
-  ]
-}

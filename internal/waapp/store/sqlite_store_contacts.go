@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/wamodel"
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/wamodel"
 )
 
 func (s *SQLiteStore) SaveWAContacts(ctx context.Context, contacts []*waappv1.WAContact) error {
@@ -24,25 +24,19 @@ func (s *SQLiteStore) SaveWAContacts(ctx context.Context, contacts []*waappv1.WA
 		if contact == nil || contact.GetContactId() == "" || contact.GetWaAccountId() == "" {
 			continue
 		}
+		current := &SQLiteStore{queries: tx}
+		existing := new(waappv1.WAContact)
+		err := current.loadPayload(ctx, "wa_sqlite_contacts", contact.GetContactId(), existing, waappv1.WaErrorCode_WA_ERROR_CODE_MESSAGE_NOT_FOUND, "WA contact not found")
+		if err != nil && shared.ToProtoError(err).GetCode() != waappv1.WaErrorCode_WA_ERROR_CODE_MESSAGE_NOT_FOUND {
+			return err
+		}
+		contact = wamodel.MergeWAContact(existing, contact)
 		payload, err := sqliteMarshal(contact)
 		if err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO wa_sqlite_contacts (id,wa_account_id,updated_at,payload) VALUES (?,?,?,?)
-ON CONFLICT(id) DO UPDATE SET
-  wa_account_id=excluded.wa_account_id,
-  updated_at=excluded.updated_at,
-  payload=CASE
-    WHEN COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), '') IN ('', '未知联系人') THEN excluded.payload
-    WHEN COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), '') LIKE '联系人 %' THEN excluded.payload
-    WHEN COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), '') LIKE 'LID %' THEN excluded.payload
-    WHEN COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), '') = '0' THEN excluded.payload
-    WHEN length(ltrim(COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), ''), '+')) >= 6
-      AND ltrim(COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), ''), '+') NOT GLOB '*[^0-9]*' THEN excluded.payload
-    WHEN COALESCE(NULLIF(json_extract(wa_sqlite_contacts.payload, '$.number'), ''), NULLIF(json_extract(excluded.payload, '$.number'), ''), '') <> ''
-      AND COALESCE(json_extract(wa_sqlite_contacts.payload, '$.display_name'), '') = '+' || COALESCE(NULLIF(json_extract(wa_sqlite_contacts.payload, '$.number'), ''), NULLIF(json_extract(excluded.payload, '$.number'), ''), '') THEN excluded.payload
-    ELSE wa_sqlite_contacts.payload
-  END`, contact.GetContactId(), contact.GetWaAccountId(), SQLiteTimeValue(shared.TimeFromProto(contact.GetAudit().GetUpdatedAt())), payload); err != nil {
+ON CONFLICT(id) DO UPDATE SET updated_at=excluded.updated_at,payload=excluded.payload`, contact.GetContactId(), contact.GetWaAccountId(), SQLiteTimeValue(shared.TimeFromProto(contact.GetAudit().GetUpdatedAt())), payload); err != nil {
 			return err
 		}
 	}
@@ -69,7 +63,7 @@ func (s *SQLiteStore) GetWAContactByRef(ctx context.Context, waAccountIDValue st
 	args := append([]any{waAccountIDValue}, idArgs...)
 	args = append(args, jidArgs...)
 	args = append(args, numberArgs...)
-	row := s.db.QueryRowContext(ctx, `SELECT payload FROM wa_sqlite_contacts WHERE wa_account_id=? AND (`+idClause+` OR `+jidClause+` OR `+numberClause+`) ORDER BY updated_at DESC, id DESC LIMIT 1`, args...)
+	row := s.queries.QueryRowContext(ctx, `SELECT payload FROM wa_sqlite_contacts WHERE wa_account_id=? AND (`+idClause+` OR `+jidClause+` OR `+numberClause+`) ORDER BY (json_extract(payload,'$.jid') LIKE '%@lid') DESC,updated_at DESC, id DESC LIMIT 1`, args...)
 	var payload string
 	if err := row.Scan(&payload); err != nil {
 		return nil, sqliteNotFound(err, waappv1.WaErrorCode_WA_ERROR_CODE_MESSAGE_NOT_FOUND, "WA contact not found")
@@ -117,14 +111,14 @@ func (s *SQLiteStore) ListWAContacts(ctx context.Context, waAccountIDValue strin
 	return items, nextCursor, nil
 }
 
-func (s *SQLiteStore) DeleteWAContact(ctx context.Context, waAccountIDValue string, refs []string, deletedAt time.Time) (DeleteWAContactResult, error) {
+func (s *SQLiteStore) DeleteWAContact(ctx context.Context, waAccountIDValue string, refs []string, deletedAt time.Time) (*waappv1.DeleteWAContactResponse, error) {
 	refs = shared.UniqueNonEmptyStrings(refs...)
 	if len(refs) == 0 {
-		return DeleteWAContactResult{}, nil
+		return nil, nil
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	deletedStatus := waappv1.MessageDeleteStatus_MESSAGE_DELETE_STATUS_DELETED_FOR_ME.String()
@@ -140,7 +134,7 @@ WHERE EXISTS (
 AND `+messageRefClause+`
 AND COALESCE(json_extract(payload, '$.delete_status'), 'MESSAGE_DELETE_STATUS_NOT_DELETED')<>'MESSAGE_DELETE_STATUS_DELETED_FOR_ME'`, messageArgs...)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	otpSourceClause, otpSourceArgs := sqliteInClause("json_extract(payload, '$.source_party')", refs)
 	otpMessageClause, otpMessageArgs := sqliteInClause("COALESCE(NULLIF(json_extract(m.payload, '$.contact_ref'), ''), json_extract(m.payload, '$.sender_ref'))", refs)
@@ -161,7 +155,7 @@ WHERE wa_account_id=? AND (
   )
 )`, otpArgs...)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	contactIDClause, contactIDArgs := sqliteInClause("id", refs)
 	jidClause, jidArgs := sqliteInClause("json_extract(payload, '$.jid')", refs)
@@ -173,15 +167,15 @@ WHERE wa_account_id=? AND (
 WHERE wa_account_id=?
   AND (`+contactIDClause+` OR `+jidClause+` OR `+numberClause+`)`, contactArgs...)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	messageCount, _ := messageResult.RowsAffected()
 	otpCount, _ := otpResult.RowsAffected()
 	contactCount, _ := contactResult.RowsAffected()
-	return DeleteWAContactResult{Deleted: messageCount+otpCount+contactCount > 0, DeletedMessageCount: int(messageCount)}, nil
+	return &waappv1.DeleteWAContactResponse{Deleted: messageCount+otpCount+contactCount > 0, DeletedMessageCount: int32(messageCount)}, nil
 }
 
 func (s *SQLiteStore) enrichWAContactMessageStats(ctx context.Context, waAccountIDValue string, contact *waappv1.WAContact) error {
@@ -192,15 +186,15 @@ func (s *SQLiteStore) enrichWAContactMessageStats(ctx context.Context, waAccount
 	var messageCount int32
 	var unreadCount int32
 	var lastMessageAt int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*),
-  COALESCE(SUM(CASE WHEN json_extract(m.payload, '$.read_at') IS NULL AND COALESCE(json_extract(m.payload, '$.direction'), 'ACCOUNT_MESSAGE_DIRECTION_INBOUND')='ACCOUNT_MESSAGE_DIRECTION_INBOUND' THEN 1 ELSE 0 END), 0),
-  COALESCE(MAX(m.received_at), 0)
-FROM wa_sqlite_inbound_messages m
-JOIN wa_sqlite_message_sessions s ON s.id=m.message_session_id
-WHERE s.wa_account_id=?
-  AND json_extract(m.payload, '$.kind')=?
-  AND COALESCE(NULLIF(json_extract(m.payload, '$.contact_ref'), ''), json_extract(m.payload, '$.sender_ref')) IN (?, ?, ?)
-  AND COALESCE(json_extract(m.payload, '$.delete_status'), 'MESSAGE_DELETE_STATUS_NOT_DELETED')<>'MESSAGE_DELETE_STATUS_DELETED_FOR_ME'`,
+	if err := s.queries.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(unread),0),COALESCE(MAX(received_at),0) FROM (
+ SELECT MIN(m.received_at) AS received_at,
+ CASE WHEN MAX(json_extract(m.payload,'$.read_at')) IS NULL AND COALESCE(json_extract(m.payload,'$.direction'),'ACCOUNT_MESSAGE_DIRECTION_INBOUND')='ACCOUNT_MESSAGE_DIRECTION_INBOUND' THEN 1 ELSE 0 END AS unread,
+ MAX(COALESCE(json_extract(m.payload,'$.delete_status'),'')='MESSAGE_DELETE_STATUS_DELETED_FOR_ME') AS removed
+ FROM wa_sqlite_inbound_messages m JOIN wa_sqlite_message_sessions s ON s.id=m.message_session_id
+ WHERE s.wa_account_id=? AND json_extract(m.payload,'$.kind')=?
+ AND COALESCE(NULLIF(json_extract(m.payload,'$.contact_ref'),''),json_extract(m.payload,'$.sender_ref')) IN (?,?,?)
+ GROUP BY COALESCE(NULLIF(json_extract(m.payload,'$.provider_message_id'),''),m.id),COALESCE(json_extract(m.payload,'$.sender_ref'),''),COALESCE(json_extract(m.payload,'$.direction'),'ACCOUNT_MESSAGE_DIRECTION_INBOUND')
+) logical WHERE removed=0`,
 		waAccountIDValue, waappv1.InboundMessageKind_INBOUND_MESSAGE_KIND_MESSAGE.String(), primaryRef, secondaryRef, jidRef).Scan(&messageCount, &unreadCount, &lastMessageAt); err != nil {
 		return err
 	}
@@ -218,7 +212,7 @@ WHERE s.wa_account_id=?
 }
 
 func (s *SQLiteStore) latestWAContactMessagePreview(ctx context.Context, waAccountIDValue string, primaryRef string, secondaryRef string, jidRef string) (string, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT m.payload, COALESCE((
+	row := s.queries.QueryRowContext(ctx, `SELECT m.payload, COALESCE((
   SELECT d.payload
   FROM wa_sqlite_decrypted_messages d
   WHERE d.message_id=m.id

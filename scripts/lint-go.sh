@@ -7,11 +7,10 @@ cd "${repo_root}"
 modules=(".")
 
 unformatted="$(
-  for module in "${modules[@]}"; do
-    if [[ -d "${module}" ]]; then
-      find "${module}"         \( -path '*/.git' -o -path '*/vendor' -o -path '*/node_modules' -o -path '*/dist' \) -prune         -o -name '*.go' -exec gofmt -l {} +
-    fi
-  done | sort -u
+  git ls-files -z --cached --others --exclude-standard '*.go' |
+    while IFS= read -r -d '' source_file; do
+      if [[ -f "${source_file}" ]]; then gofmt -l "${source_file}"; fi
+    done | sort -u
 )"
 
 if [[ -n "${unformatted}" ]]; then
@@ -19,6 +18,17 @@ if [[ -n "${unformatted}" ]]; then
   echo "${unformatted}"
   exit 1
 fi
+
+go list -deps ./cmd/... |
+  while IFS= read -r dependency; do
+    case "${dependency}" in
+      go.mau.fi/whatsmeow/proto/* | go.mau.fi/whatsmeow/binary | go.mau.fi/whatsmeow/binary/* | go.mau.fi/whatsmeow/types) ;;
+      go.mau.fi/whatsmeow | go.mau.fi/whatsmeow/*)
+        echo "native protocol dependency boundary violated: ${dependency}"
+        exit 1
+        ;;
+    esac
+  done
 
 for module in "${modules[@]}"; do
   if [[ -f "${module}/go.mod" ]]; then

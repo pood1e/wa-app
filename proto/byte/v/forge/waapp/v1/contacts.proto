@@ -6,7 +6,7 @@ import "byte/v/forge/waapp/v1/common.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppContactsProto";
 option java_package = "com.bytevforge.waapp.v1";
@@ -14,8 +14,48 @@ option php_namespace = "ByteVForge\\WaApp\\V1";
 
 service WaContactService {
   rpc ListWAContacts(ListWAContactsRequest) returns (ListWAContactsResponse);
+  rpc SaveWAContact(SaveWAContactRequest) returns (SaveWAContactResponse);
   rpc ResolveWAContacts(ResolveWAContactsRequest) returns (ResolveWAContactsResponse);
   rpc DeleteWAContact(DeleteWAContactRequest) returns (DeleteWAContactResponse);
+  rpc SubscribeWAContactPresence(SubscribeWAContactPresenceRequest) returns (SubscribeWAContactPresenceResponse);
+}
+
+enum WAContactPresenceState {
+  WA_CONTACT_PRESENCE_STATE_UNSPECIFIED = 0;
+  WA_CONTACT_PRESENCE_STATE_ONLINE = 1;
+  WA_CONTACT_PRESENCE_STATE_OFFLINE = 2;
+}
+
+enum WAChatActivityType {
+  WA_CHAT_ACTIVITY_TYPE_UNSPECIFIED = 0;
+  WA_CHAT_ACTIVITY_TYPE_TYPING = 1;
+  WA_CHAT_ACTIVITY_TYPE_RECORDING = 2;
+  WA_CHAT_ACTIVITY_TYPE_PAUSED = 3;
+}
+
+message WAChatActivity {
+  string participant_ref = 1;
+  WAChatActivityType type = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+message WAContactPresence {
+  string contact_ref = 1;
+  WAContactPresenceState state = 2;
+  google.protobuf.Timestamp last_seen_at = 3;
+  google.protobuf.Timestamp observed_at = 4;
+  repeated WAChatActivity activities = 5;
+}
+
+message SubscribeWAContactPresenceRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string contact_ref = 3;
+}
+
+message SubscribeWAContactPresenceResponse {
+  WAContactPresence presence = 1;
+  WaError error = 2;
 }
 
 enum WAContactKind {
@@ -44,6 +84,20 @@ message WAContact {
   int32 unread_count = 14;
   google.protobuf.Timestamp last_message_at = 15;
   string last_message_preview = 16;
+  string saved_name = 17;
+}
+
+// Saves a verified WhatsApp user in this account's wa-app contact list.
+message SaveWAContactRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string phone_number = 3;
+  string display_name = 4;
+}
+
+message SaveWAContactResponse {
+  WAContact contact = 1;
+  WaError error = 2;
 }
 
 message ListWAContactsRequest {

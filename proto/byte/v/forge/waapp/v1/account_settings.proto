@@ -7,7 +7,7 @@ import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppAccountSettingsProto";
 option java_package = "com.bytevforge.waapp.v1";
@@ -90,7 +90,9 @@ message SetTwoFactorAuthSettingsRequest {
   RequestContext context = 1;
   AccountLoginSelector selector = 2;
   // Sensitive. Do not log, persist, or emit outside the authorized account settings operation.
-  SensitiveText pin = 3;
+  SensitiveText password = 4;
+  reserved 3;
+  reserved "pin";
 }
 
 message SetTwoFactorAuthSettingsResponse {

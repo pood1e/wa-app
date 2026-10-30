@@ -1,9 +1,9 @@
 import { LongConnectionStatus, type LongConnectionState } from '../proto/byte/v/forge/waapp/v1/messaging';
 import { Badge } from '@/components/ui/badge';
-import { isConnectionTransferredOut } from './wa-long-connection-badge';
+import { isConnectionRejected, isConnectionTransferredOut } from './wa-long-connection-badge';
 
 export function WaConnectionDot({ connection, loading = false, className = '' }: { connection?: LongConnectionState; loading?: boolean; className?: string }) {
-  const view = connectionView(connection?.status, loading, isConnectionTransferredOut(connection));
+  const view = isConnectionRejected(connection) ? { label: '账号登录已失效', className: 'bg-destructive' } : connectionView(connection?.status, loading, isConnectionTransferredOut(connection));
   return <Badge className={`size-3.5 min-w-0 rounded-full border-2 border-sidebar p-0 shadow-none ${view.className} ${className}`} variant="secondary" title={view.label} aria-label={view.label} />;
 }
 
