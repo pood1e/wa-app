@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.protocol.v1;
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1;protocolv1";
+
+enum HandshakePQMode {
+  HANDSHAKE_PQ_MODE_UNKNOWN = 0;
+  XXKEM = 1;
+  XXKEM_FS = 2;
+  WA_CLASSICAL = 3;
+  WA_PQ = 4 [deprecated = true];
+  IKKEM = 5;
+  IKKEM_FS = 6;
+  XXKEM_2 = 7;
+  IKKEM_2 = 8;
+  XXKEM_EPH = 9;
+}
+
+// Field numbers and presence match the native Android handshake messages.
+message HandshakeMessage {
+  optional ClientHello client_hello = 2;
+  optional ServerHello server_hello = 3;
+  optional ClientFinish client_finish = 4;
+}
+
+message ClientHello {
+  optional bytes ephemeral = 1;
+  optional bytes static = 2;
+  optional bytes payload = 3;
+  optional bool use_extended = 4;
+  optional bytes extended_ciphertext = 5;
+  optional bytes padded_bytes = 6;
+  optional bool send_server_hello_padded_bytes = 7;
+  optional bool simulate_xxkem_fs = 8;
+  optional HandshakePQMode pq_mode = 9;
+  optional bytes extended_ephemeral = 10;
+}
+
+message ServerHello {
+  optional bytes ephemeral = 1;
+  optional bytes static = 2;
+  optional bytes payload = 3;
+  optional bytes extended_static = 4;
+  optional bytes padding_bytes = 5;
+  optional bytes extended_ciphertext = 6;
+}
+
+message ClientFinish {
+  optional bytes static = 1;
+  optional bytes payload = 2;
+  optional bytes extended_ciphertext = 3;
+  optional bytes padded_bytes = 4;
+  optional bool simulate_xxkem_fs = 5;
+}
+
+message NoiseCertificateChain {
+  optional NoiseCertificate leaf = 1;
+  optional NoiseCertificate intermediate = 2;
+}
+
+message NoiseCertificate {
+  optional bytes details = 1;
+  optional bytes signature = 2;
+}
+
+message NoiseCertificateDetails {
+  optional uint32 serial = 1;
+  optional uint32 issuer_serial = 2;
+  optional bytes key = 3;
+  optional uint64 not_before = 4;
+  optional uint64 not_after = 5;
+}

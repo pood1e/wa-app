@@ -1,0 +1,11 @@
+.git
+.tmp
+.codex
+gen
+docs
+tools
+webui/node_modules
+webui/dist
+webui/src/proto
+**/*.sqlite3*
+**/.env*

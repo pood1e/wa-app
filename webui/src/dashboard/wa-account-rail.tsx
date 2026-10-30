@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Info, Loader2, Plus } from 'lucide-react';
+import { Info, Loader2, Plus, Settings2 } from 'lucide-react';
 import { Link, NavLink } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
@@ -21,37 +21,36 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import type { LongConnectionState } from '../proto/byte/v/forge/waapp/v1/messaging';
-import { WAAccountStatus } from '../proto/byte/v/forge/waapp/v1/profile';
 import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { waAccountID } from './wa-api';
 import { WaAccountAvatar } from './wa-account-avatar';
 import { WaConnectionDot } from './wa-connection-dot';
-import { WaPendingCleanupButton } from './wa-pending-cleanup-button';
 import { WaThemeToggle } from './wa-theme-toggle';
+import { WhatsAppIcon } from './wa-brand-icon';
 import { waAccountPath, waChatsPath } from './wa-route-paths';
 
-type RailProps = { accounts: WAAccount[]; selectedID: string; avatarVersion: string; connections: Map<string, LongConnectionState>; loading: boolean; connectionsLoading: boolean; hasNextPage: boolean; loadingMore: boolean; cleaningPending: boolean; onLoadMore: () => void; onCleanupPending: () => Promise<void> };
+type RailProps = { accounts: WAAccount[]; selectedID: string; avatarVersion: string; connections: Map<string, LongConnectionState>; loading: boolean; connectionsLoading: boolean; hasNextPage: boolean; loadingMore: boolean; onLoadMore: () => void; };
 type AccountItemProps = { account: WAAccount; selected: boolean; avatarVersion: string; connection?: LongConnectionState; loading: boolean };
 
-const railButtonClass = 'h-12 gap-2 p-1! group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-12! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!';
-const accountActionClass = 'top-1/2! right-2! size-7! -translate-y-1/2 rounded-lg';
+const railButtonClass = 'h-14 gap-3 rounded-xl p-2! group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-12! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!';
+const accountActionClass = 'top-1/2! right-2! size-7! -translate-y-1/2 rounded-full group-data-[collapsible=icon]:hidden';
 const collapsedTextClass = 'group-data-[collapsible=icon]:hidden';
+const actionButtonClass = 'h-10 gap-3 rounded-full px-3 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!';
 
-export function WaAccountRail({ accounts, selectedID, avatarVersion, connections, loading, connectionsLoading, hasNextPage, loadingMore, cleaningPending, onLoadMore, onCleanupPending }: RailProps) {
+export function WaAccountRail({ accounts, selectedID, avatarVersion, connections, loading, connectionsLoading, hasNextPage, loadingMore, onLoadMore }: RailProps) {
   const [query, setQuery] = useState('');
-  const { state } = useSidebar();
-  const expanded = state === 'expanded';
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  const expanded = state === 'expanded' || isMobile;
   const visibleAccounts = useFilteredAccounts(accounts, expanded ? query : '');
-  const pendingCount = usePendingRegistrationCount(accounts);
   return (
     <Sidebar collapsible="icon" aria-label="WA 账号" className="border-r border-border">
-      <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
-        <RailHeader value={query} pendingCount={pendingCount} cleaningPending={cleaningPending} onChange={setQuery} onCleanupPending={onCleanupPending} />
+      <SidebarHeader className="min-h-[76px] justify-center gap-3 px-2 py-[18px]">
+        <RailHeader value={query} onChange={setQuery} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="p-1">
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-2">
               {loading ? <LoadingItems /> : null}
               {visibleAccounts.map((account) => {
                 const id = waAccountID(account);
@@ -63,44 +62,51 @@ export function WaAccountRail({ accounts, selectedID, avatarVersion, connections
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border p-1">
-        <WaThemeToggle className="size-8 group-data-[collapsible=icon]:mx-auto" />
+      <SidebarFooter className="gap-2 px-2 py-3">
+        <SidebarMenu>
+          <SidebarMenuItem><SidebarMenuButton asChild tooltip="添加账号" className={actionButtonClass}><Link to="/accounts/new" aria-label="添加账号" onClick={() => setOpenMobile(false)}><Plus className="size-5!" /><span className={collapsedTextClass}>添加账号</span></Link></SidebarMenuButton></SidebarMenuItem>
+          {selectedID ? <SidebarMenuItem><SidebarMenuButton asChild tooltip="账号设置" className={actionButtonClass}><Link to={waAccountPath(selectedID)} aria-label="账号设置" onClick={() => setOpenMobile(false)}><Settings2 className="size-5!" /><span className={collapsedTextClass}>账号设置</span></Link></SidebarMenuButton></SidebarMenuItem> : null}
+        </SidebarMenu>
+        <WaThemeToggle className="size-10 rounded-full group-data-[collapsible=icon]:mx-auto" />
       </SidebarFooter>
       <SidebarRail aria-label={expanded ? '收起账号栏' : '展开账号栏'} title={expanded ? '收起账号栏' : '展开账号栏'} />
     </Sidebar>
   );
 }
 
-function RailHeader({ value, pendingCount, cleaningPending, onChange, onCleanupPending }: { value: string; pendingCount: number; cleaningPending: boolean; onChange: (value: string) => void; onCleanupPending: () => Promise<void> }) {
+function RailHeader({ value, onChange }: { value: string; onChange: (value: string) => void; }) {
   return (
-    <div className="flex h-10 items-center gap-2 group-data-[collapsible=icon]:justify-center">
-      <SidebarInput className="h-8 group-data-[collapsible=icon]:hidden" value={value} onChange={(event) => onChange(event.target.value)} placeholder="搜索手机号" aria-label="搜索账号" />
-      <WaPendingCleanupButton pendingCount={pendingCount} busy={cleaningPending} onCleanup={onCleanupPending} />
-      <Button asChild size="icon" variant="ghost" className="size-8 group-data-[collapsible=icon]:hidden" title="添加账号" aria-label="添加账号"><Link to="/accounts/new"><Plus size={16} /></Link></Button>
-      <SidebarTrigger className="shrink-0" aria-label="切换账号栏" title="切换账号栏" />
+    <div className="grid gap-4">
+      <div className="flex h-10 items-center gap-2 px-1 group-data-[collapsible=icon]:justify-center">
+        <WhatsAppIcon className={`size-6 ${collapsedTextClass}`} />
+        <span className={`flex-1 text-base font-semibold text-foreground ${collapsedTextClass}`}>账号</span>
+        <SidebarTrigger className="size-9 shrink-0 rounded-full" aria-label="切换账号栏" title="切换账号栏" />
+      </div>
+      <SidebarInput className="h-9 rounded-full border-transparent bg-background px-4 shadow-none group-data-[collapsible=icon]:hidden" value={value} onChange={(event) => onChange(event.target.value)} placeholder="搜索手机号" aria-label="搜索账号" />
     </div>
   );
 }
 
 function AccountItem({ account, selected, avatarVersion, connection, loading }: AccountItemProps) {
+  const { setOpenMobile } = useSidebar();
   const id = waAccountID(account);
   const label = waAccountRailLabel(account);
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild size="lg" isActive={selected} tooltip={label.tooltip} className={railButtonClass}>
-        <NavLink to={waChatsPath(id)} title={label.tooltip} aria-label={label.tooltip}>
-          <span className="relative shrink-0">
+        <NavLink to={waChatsPath(id)} title={label.tooltip} aria-label={label.tooltip} onClick={() => setOpenMobile(false)}>
+          <span className={`relative shrink-0 rounded-full ${selected ? 'ring-2 ring-primary ring-offset-2 ring-offset-sidebar' : ''}`}>
             <WaAccountAvatar account={account} version={avatarVersion} size="md" />
             <WaConnectionDot className="absolute bottom-0 right-0" connection={connection} loading={loading} />
           </span>
           <span className={`min-w-0 flex-1 ${collapsedTextClass}`}>
             <span className="block truncate text-sm font-medium">{label.primary}</span>
-            {label.subtitle ? <span className="block truncate font-mono text-xs text-muted-foreground">{label.subtitle}</span> : null}
+            {label.subtitle ? <span className="mt-1 block truncate text-xs text-muted-foreground">{label.subtitle}</span> : null}
           </span>
         </NavLink>
       </SidebarMenuButton>
       <SidebarMenuAction asChild showOnHover={!selected} className={accountActionClass}>
-        <Link to={waAccountPath(id)} title="账号详情" aria-label={`${label.tooltip} 账号详情`}><Info /></Link>
+        <Link to={waAccountPath(id)} title="账号详情" aria-label={`${label.tooltip} 账号详情`} onClick={() => setOpenMobile(false)}><Info /></Link>
       </SidebarMenuAction>
     </SidebarMenuItem>
   );
@@ -118,9 +124,6 @@ function EmptyAccounts({ searching }: { searching: boolean }) {
   return <Empty className="mt-4 border-0 p-4"><EmptyHeader><EmptyTitle>{searching ? '没有匹配账号' : '还没有账号'}</EmptyTitle><EmptyDescription>{searching ? '没有匹配的已加载账号' : '添加账号后会显示在这里'}</EmptyDescription></EmptyHeader></Empty>;
 }
 
-function usePendingRegistrationCount(accounts: WAAccount[]) {
-  return useMemo(() => accounts.filter((account) => account.status === WAAccountStatus.WA_ACCOUNT_STATUS_PENDING_REGISTRATION).length, [accounts]);
-}
 
 function useFilteredAccounts(accounts: WAAccount[], query: string) {
   return useMemo(() => {

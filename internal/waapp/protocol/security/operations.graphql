@@ -1,0 +1,22 @@
+query GetTwofaQuery {
+  xwa2_get_twofa { twofa_enabled twofa_methods { method value state } is_device_trusted latitude longitude }
+}
+query HasPasswordQuery { xwa2_has_password { has_password upgrade_needed } }
+query SetTwofaMutation { xwa2_set_twofa { success twofa_already_enabled is_device_trusted } }
+query WWWGetCertificates {
+  xwa2_ent_get_certificates {
+    encryption_pem { pem ttl key_id }
+    signature_pem { pem ttl key_id }
+    password_pem { pem ttl key_id }
+  }
+}
+query WWWCreateUser {
+  xwa2_ent_create_ent { encrypted_fbid_and_access_token { key data tag nonce algorithm } }
+}
+query WWWCreateAccessToken {
+  xwa2_ent_generate_access_tokens { encrypted_fbid_and_access_token { key data tag nonce algorithm } }
+}
+query WWWTriggerAcountRecovery { xwa2_ent_request_recovery_nonce { fbid } }
+query WWWExchangeNonceForAccessToken {
+  xwa2_ent_exchange_nonce_and_password { encrypted_fbid_and_access_token { key data tag nonce algorithm } }
+}

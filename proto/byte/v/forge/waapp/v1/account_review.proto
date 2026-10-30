@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "byte/v/forge/waapp/protocol/v1/account_review.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+service WaAccountReviewService {
+  rpc GetAccountReview(GetAccountReviewRequest) returns (AccountReviewResponse);
+  rpc SubmitAccountReview(SubmitAccountReviewRequest) returns (AccountReviewResponse);
+}
+
+message GetAccountReviewRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  bool remote_refresh = 3;
+}
+
+message SubmitAccountReviewRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  SensitiveText description = 3;
+}
+
+message AccountReviewResponse {
+  byte.v.forge.waapp.protocol.v1.AccountReview review = 1;
+  WaError error = 2;
+}

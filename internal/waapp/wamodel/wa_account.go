@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 func NewWAAccount(id string, displayName string, phone *waappv1.PhoneTarget, status waappv1.WAAccountStatus, audit *waappv1.AuditStamp) *waappv1.WAAccount {

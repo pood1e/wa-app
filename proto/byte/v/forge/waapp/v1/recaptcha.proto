@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+// Device-backed SDK operation; registration parameters and HTTP stay with the caller.
+service RecaptchaService {
+  rpc GenerateLoginToken(RecaptchaLoginTokenRequest) returns (RecaptchaLoginToken);
+}
+
+message RecaptchaLoginTokenRequest {
+  string site_key = 1;
+}
+
+message RecaptchaLoginToken {
+  string token = 1;
+}

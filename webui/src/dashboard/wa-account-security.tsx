@@ -1,11 +1,13 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { ArrowRightLeft, CheckCircle2, KeyRound, Mail, RefreshCw, Send, ShieldCheck } from 'lucide-react';
+import { ArrowRightLeft, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AccountSettingsOperationStatus } from '../proto/byte/v/forge/waapp/v1/account_settings';
-import type { GetTwoFactorAuthStatusResponse } from '../proto/byte/v/forge/waapp/v1/account_settings';
+import type { AccountSettingsOperation, GetTwoFactorAuthStatusResponse } from '../proto/byte/v/forge/waapp/v1/account_settings';
 import type { WaAccountProjection } from './wa-api';
 import { getWaTwoFactorAuthStatus, requestWaAccountEmailOtp, setWaAccountEmail, setWaTwoFactorAuthSettings, verifyWaAccountEmailOtp, waAccountID, waKeys } from './wa-api';
 import { WaAccountChangeNumberCard } from './wa-account-change-number-card';
+import { WaEmailOtpForm } from './wa-email-otp-form';
+import { WaAccountPasswordForm } from './wa-account-password-form';
 import {
   emailBadgeVariant,
   emailStatusLabel,
@@ -29,11 +31,12 @@ type TwoFactorStatusData = NonNullable<GetTwoFactorAuthStatusResponse['status']>
 
 export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
   const queryClient = useQueryClient();
-  const [pin, setPin] = useState('');
+  const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [emailOtp, setEmailOtp] = useState('');
   const [emailOtpVisible, setEmailOtpVisible] = useState(false);
-  const [pinOpen, setPinOpen] = useState(false);
+  const [emailOtpOperation, setEmailOtpOperation] = useState<AccountSettingsOperation>();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [changeNumberOpen, setChangeNumberOpen] = useState(false);
   const [lastStatus, setLastStatus] = useState<AccountSettingsOperationStatus | undefined>();
@@ -55,23 +58,33 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
     }));
   const twoFactorStatus = useQuery({
     queryKey: statusKey,
-    queryFn: () => getWaTwoFactorAuthStatus(account, { remoteRefresh: true }),
+    queryFn: ({ signal }) => getWaTwoFactorAuthStatus(account, { remoteRefresh: true, signal }),
     enabled: false,
     gcTime: 30 * 60_000,
     initialData: () => initialTwoFactorStatus(account.two_factor_auth),
     staleTime: Infinity,
   });
-  const pinConfigured = twoFactorConfigured(twoFactorStatus);
+  const passwordConfigured = twoFactorConfigured(twoFactorStatus);
   const emailConfigured = twoFactorEmailConfigured(twoFactorStatus);
-  const pinAction = pinConfigured ? '修改 2FA PIN' : '设置 2FA PIN';
+  const passwordAction = passwordConfigured ? '修改验证密码' : '设置验证密码';
   const emailAction = emailConfigured ? '修改账户邮箱' : '设置账户邮箱';
   const twoFactor = useMutation({
-    mutationFn: () => setWaTwoFactorAuthSettings(account, pin),
+    mutationFn: () => setWaTwoFactorAuthSettings(account, password),
     onSuccess: (resp) => {
-      setPin('');
-      setPinOpen(false);
-      if (resp.operation?.status !== AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_REJECTED) patchStatus({ configured: true });
-      handleSuccess(pinConfigured ? '2FA PIN 修改请求已提交' : '2FA PIN 设置请求已提交', resp.operation?.status);
+      if (resp.operation?.status !== AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_ACCEPTED) { handleError(new Error('未确认两步验证已开启，请同步状态后重试')); return; }
+      setPassword('');
+      setPasswordOpen(false);
+      patchStatus({ configured: true });
+      handleSuccess(passwordConfigured ? '两步验证密码已修改' : '两步验证密码已设置', resp.operation?.status);
+    },
+    onError: handleError,
+  });
+  const otpRequest = useMutation({
+    mutationFn: () => requestWaAccountEmailOtp(account),
+    onSuccess: (resp) => {
+      setEmailOtpVisible(true);
+      setEmailOtpOperation(resp.operation);
+      handleSuccess('请查收邮箱验证码', resp.operation?.status);
     },
     onError: handleError,
   });
@@ -80,18 +93,16 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
     onSuccess: (resp) => {
       const setStatus = resp.operation?.status;
       const verified = setStatus === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_VERIFIED;
-      setEmailOtpVisible(shouldCollectEmailOtpAfterSet(setStatus));
+      const needsVerification = shouldCollectEmailOtpAfterSet(setStatus);
+      setEmailOtpVisible(needsVerification);
+      setEmailOtpOperation(undefined);
       if (setStatus !== AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_REJECTED) {
-        patchStatus({ email_address: email, email_configured: true, email_verified: verified, email_confirmed: verified });
+        patchStatus({ email_address: email, email_configured: true, email_verified: verified, email_confirmed: false });
       }
       if (verified) { setEmailOtp(''); setEmailOpen(false); }
-      handleSuccess(emailConfigured ? '账户邮箱修改请求已提交' : '账户邮箱设置请求已提交', setStatus);
+      if (needsVerification) otpRequest.mutate();
+      else handleSuccess('账户邮箱已验证', setStatus);
     },
-    onError: handleError,
-  });
-  const otpRequest = useMutation({
-    mutationFn: () => requestWaAccountEmailOtp(account),
-    onSuccess: (resp) => { setEmailOtpVisible(true); handleSuccess('邮箱 OTP 已请求', resp.operation?.status); },
     onError: handleError,
   });
   const otpVerify = useMutation({
@@ -99,9 +110,13 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
     onSuccess: (resp) => {
       const status = resp.operation?.status;
       setEmailOtp('');
+      setEmailOtpOperation(resp.operation);
       setEmailOtpVisible(shouldShowEmailOtp(status));
       if (status === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_VERIFIED) { patchStatus({ email_configured: true, email_verified: true }); setEmailOpen(false); }
-      handleSuccess('邮箱 OTP 校验请求已提交', status);
+      if (status === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_CODE_MISMATCH) {
+        setLastStatus(status);
+        onError('邮箱验证码不匹配');
+      } else handleSuccess('邮箱验证成功', status);
     },
     onError: handleError,
   });
@@ -116,11 +131,12 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
     if (account.two_factor_auth) queryClient.setQueryData(statusKey, initialTwoFactorStatus(account.two_factor_auth));
   }, [account.two_factor_auth, queryClient, statusKey]);
   useEffect(() => {
-    setPin('');
+    setPassword('');
     setEmail('');
     setEmailOtp('');
     setEmailOtpVisible(false);
-    setPinOpen(false);
+    setEmailOtpOperation(undefined);
+    setPasswordOpen(false);
     setEmailOpen(false);
     setChangeNumberOpen(false);
   }, [accountID]);
@@ -133,14 +149,14 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
           <Button size="icon" variant="ghost" type="button" disabled={busy || syncing} title="同步状态" aria-label="同步状态" onClick={() => void refreshStatus()}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''} /></Button>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="divide-y divide-border">
         <SettingRow
           icon={<ShieldCheck size={15} />}
-          title="两步验证 PIN"
+          title="两步验证密码"
           badge={<Badge variant={twoFactorBadgeVariant(twoFactorStatus)}>{twoFactorStatusLabel(twoFactorStatus)}</Badge>}
-          actionLabel={pinAction}
+          actionLabel={passwordAction}
           disabled={busy}
-          onAction={() => { setPin(''); setPinOpen(true); }}
+          onAction={() => { setPassword(''); setPasswordOpen(true); }}
         />
         <SettingRow
           icon={<Mail size={15} />}
@@ -161,13 +177,13 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
         />
       </div>
 
-      <Dialog open={pinOpen} onOpenChange={(open) => { setPinOpen(open); if (!open) setPin(''); }}>
+      <Dialog open={passwordOpen} onOpenChange={(open) => { setPasswordOpen(open); if (!open) setPassword(''); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle><ShieldCheck size={16} />{pinAction}</DialogTitle>
-            <DialogDescription>{pinConfigured ? '输入新的 6 位两步验证 PIN。' : '设置 6 位两步验证 PIN,提升账号安全。'}</DialogDescription>
+            <DialogTitle><ShieldCheck size={16} />{passwordAction}</DialogTitle>
+            <DialogDescription>{passwordConfigured ? '输入新的两步验证密码。' : '设置两步验证密码，保护账号登录。'}</DialogDescription>
           </DialogHeader>
-          <PinForm pin={pin} busy={busy} configured={pinConfigured} onPinChange={setPin} onSubmit={(event) => submit(event, twoFactor.mutate)} />
+          <WaAccountPasswordForm password={password} busy={busy} configured={passwordConfigured} onPasswordChange={setPassword} onSubmit={(event) => submit(event, twoFactor.mutate)} />
         </DialogContent>
       </Dialog>
 
@@ -179,14 +195,7 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
           </DialogHeader>
           <EmailForm email={email} busy={busy} configured={emailConfigured} onEmailChange={(value) => { setEmail(value); setEmailOtp(''); setEmailOtpVisible(false); }} onSubmit={(event) => submit(event, emailSet.mutate)} />
           {emailOtpVisible && (
-            <div className="grid gap-2 border-t border-border pt-4">
-              <div className="inline-flex items-center gap-2 text-sm font-medium"><Send size={15} />邮箱 OTP 验证</div>
-              <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
-                <Button type="button" variant="outline" disabled={busy} onClick={() => otpRequest.mutate()}><Send size={14} />请求</Button>
-                <Input value={emailOtp} onChange={(event) => setEmailOtp(event.target.value)} inputMode="numeric" autoComplete="one-time-code" type="password" maxLength={6} disabled={busy} placeholder="6 位验证码" />
-                <Button type="button" disabled={busy || emailOtp.length !== 6} onClick={() => otpVerify.mutate()}><CheckCircle2 size={14} />校验</Button>
-              </div>
-            </div>
+            <WaEmailOtpForm operation={emailOtpOperation} code={emailOtp} busy={busy} onCodeChange={setEmailOtp} onRequest={() => otpRequest.mutate()} onVerify={() => otpVerify.mutate()} />
           )}
         </DialogContent>
       </Dialog>
@@ -206,27 +215,13 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
 
 function SettingRow({ icon, title, badge, detail, actionLabel, disabled, onAction }: { icon: ReactNode; title: string; badge?: ReactNode; detail?: string; actionLabel: string; disabled?: boolean; onAction: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-border p-3">
-      <div className="min-w-0">
-        <div className="inline-flex items-center gap-2 text-sm font-medium">{icon}{title}{badge}</div>
-        {detail ? <div className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</div> : null}
+    <div className="flex items-center justify-between gap-3 py-4 first:pt-1 last:pb-1">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">{icon}</span>
+        <div className="min-w-0"><div className="text-sm font-medium">{title}</div><div className="mt-1 flex flex-wrap items-center gap-2">{badge}{detail ? <span className="truncate text-xs text-muted-foreground">{detail}</span> : null}</div></div>
       </div>
-      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAction}>{actionLabel}</Button>
+      <Button className="rounded-full" type="button" variant="outline" size="sm" disabled={disabled} onClick={onAction}>{actionLabel}</Button>
     </div>
-  );
-}
-
-function PinForm({ pin, busy, configured, onPinChange, onSubmit }: { pin: string; busy: boolean; configured: boolean; onPinChange: (value: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return (
-    <form className="grid gap-3" onSubmit={onSubmit}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel>{configured ? '新 6 位 PIN' : '6 位 PIN'}</FieldLabel>
-          <Input value={pin} onChange={(event) => onPinChange(event.target.value)} inputMode="numeric" autoComplete="one-time-code" type="password" maxLength={6} disabled={busy} autoFocus />
-        </Field>
-      </FieldGroup>
-      <Button type="submit" className="w-full" disabled={busy || pin.length !== 6}><KeyRound size={14} />{configured ? '修改 PIN' : '设置 PIN'}</Button>
-    </form>
   );
 }
 

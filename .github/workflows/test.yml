@@ -1,0 +1,56 @@
+name: Test WA services
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: wa_test
+          POSTGRES_PASSWORD: fixture-password
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U wa_test -d postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      valkey:
+        image: valkey/valkey:9.1.2-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      WA_TEST_PG_DSN: postgres://wa_test:fixture-password@127.0.0.1:5432/postgres?sslmode=disable
+      WA_TEST_VALKEY_URL: valkey://127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Generate contracts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+          scripts/generate-proto.sh
+      - run: scripts/lint-go.sh
+      - run: go test -race ./cmd/... ./internal/...
+      - run: npm --prefix webui ci --no-audit --no-fund
+      - run: npm --prefix webui run proto
+      - run: npm --prefix webui test
+      - run: npm --prefix webui run lint
+      - run: npm --prefix webui run build

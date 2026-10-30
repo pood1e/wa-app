@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/wamodel"
 	"github.com/jackc/pgx/v5"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/wamodel"
 )
 
 func (s *PostgresStore) SaveWAContacts(ctx context.Context, contacts []*waappv1.WAContact) error {
@@ -23,13 +24,16 @@ func (s *PostgresStore) SaveWAContacts(ctx context.Context, contacts []*waappv1.
 		}
 		createdAt := shared.TimeFromProto(contact.GetAudit().GetCreatedAt())
 		updatedAt := shared.TimeFromProto(contact.GetAudit().GetUpdatedAt())
-		batch.Queue(`INSERT INTO wa_contacts (contact_id, wa_account_id, jid, number, display_name, wa_name, verified_name, profile_picture_id, kind, is_whatsapp_user, is_reachable, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		batch.Queue(`INSERT INTO wa_contacts (contact_id, wa_account_id, jid, number, display_name, wa_name, verified_name, profile_picture_id, kind, is_whatsapp_user, is_reachable, created_at, updated_at, saved_name)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 ON CONFLICT (contact_id) DO UPDATE SET
   jid=EXCLUDED.jid,
   number=COALESCE(NULLIF(EXCLUDED.number,''), wa_contacts.number),
   display_name=CASE
+    WHEN NULLIF(EXCLUDED.saved_name,'') IS NOT NULL THEN EXCLUDED.saved_name
+    WHEN NULLIF(wa_contacts.saved_name,'') IS NOT NULL THEN wa_contacts.saved_name
     WHEN NULLIF(EXCLUDED.display_name,'') IS NULL THEN wa_contacts.display_name
+    WHEN EXCLUDED.kind='WA_CONTACT_KIND_GROUP' THEN EXCLUDED.display_name
     WHEN wa_contacts.display_name='' OR wa_contacts.display_name='未知联系人' OR wa_contacts.display_name LIKE '联系人 %' OR wa_contacts.display_name LIKE 'LID %' THEN EXCLUDED.display_name
     WHEN wa_contacts.display_name='0' OR wa_contacts.display_name ~ '^\+?[0-9]{6,}$' THEN EXCLUDED.display_name
     WHEN COALESCE(NULLIF(wa_contacts.number,''), NULLIF(EXCLUDED.number,''), '') <> '' AND wa_contacts.display_name='+' || COALESCE(NULLIF(wa_contacts.number,''), NULLIF(EXCLUDED.number,''), '') THEN EXCLUDED.display_name
@@ -37,11 +41,12 @@ ON CONFLICT (contact_id) DO UPDATE SET
   END,
   wa_name=COALESCE(NULLIF(EXCLUDED.wa_name,''), wa_contacts.wa_name),
   verified_name=COALESCE(NULLIF(EXCLUDED.verified_name,''), wa_contacts.verified_name),
+  saved_name=COALESCE(NULLIF(EXCLUDED.saved_name,''), wa_contacts.saved_name),
   profile_picture_id=COALESCE(NULLIF(EXCLUDED.profile_picture_id,''), wa_contacts.profile_picture_id),
   kind=CASE WHEN EXCLUDED.kind IN ('WA_CONTACT_KIND_UNSPECIFIED','WA_CONTACT_KIND_USER') AND wa_contacts.kind <> '' THEN wa_contacts.kind ELSE EXCLUDED.kind END,
   is_whatsapp_user=wa_contacts.is_whatsapp_user OR EXCLUDED.is_whatsapp_user,
   is_reachable=wa_contacts.is_reachable OR EXCLUDED.is_reachable,
-  updated_at=GREATEST(wa_contacts.updated_at, EXCLUDED.updated_at)`, contact.GetContactId(), contact.GetWaAccountId(), contact.GetJid(), contact.GetNumber(), contact.GetDisplayName(), contact.GetWaName(), contact.GetVerifiedName(), contact.GetProfilePictureId(), wamodel.ContactKindStorageValue(contact), contact.GetIsWhatsappUser(), contact.GetIsReachable(), createdAt, updatedAt)
+  updated_at=GREATEST(wa_contacts.updated_at, EXCLUDED.updated_at)`, contact.GetContactId(), contact.GetWaAccountId(), contact.GetJid(), contact.GetNumber(), contact.GetDisplayName(), contact.GetWaName(), contact.GetVerifiedName(), contact.GetProfilePictureId(), wamodel.ContactKindStorageValue(contact), contact.GetIsWhatsappUser(), contact.GetIsReachable(), createdAt, updatedAt, contact.GetSavedName())
 		queued++
 	}
 	if queued == 0 {
@@ -53,7 +58,7 @@ ON CONFLICT (contact_id) DO UPDATE SET
 
 func (s *PostgresStore) GetWAContact(ctx context.Context, contactID string) (*waappv1.WAContact, error) {
 	var r contactRow
-	row := s.pool.QueryRow(ctx, contactSelectSQL+` WHERE c.contact_id=$1`, contactID)
+	row := s.db.QueryRow(ctx, contactSelectSQL+` WHERE c.contact_id=$1`, contactID)
 	if err := scanContactRow(row, &r); err != nil {
 		return nil, notFound(err, waappv1.WaErrorCode_WA_ERROR_CODE_MESSAGE_NOT_FOUND, "WA contact not found")
 	}
@@ -63,7 +68,7 @@ func (s *PostgresStore) GetWAContact(ctx context.Context, contactID string) (*wa
 func (s *PostgresStore) GetWAContactByRef(ctx context.Context, waAccountIDValue string, contactRef string) (*waappv1.WAContact, error) {
 	refs := wamodel.ContactRefVariants(contactRef)
 	var r contactRow
-	row := s.pool.QueryRow(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 AND (c.contact_id=ANY($2) OR c.jid=ANY($2) OR c.number=ANY($2)) ORDER BY c.updated_at DESC LIMIT 1`, waAccountIDValue, refs)
+	row := s.db.QueryRow(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 AND (c.contact_id=ANY($2) OR c.jid=ANY($2) OR c.number=ANY($2)) ORDER BY (c.jid LIKE '%@lid') DESC,c.updated_at DESC LIMIT 1`, waAccountIDValue, refs)
 	if err := scanContactRow(row, &r); err != nil {
 		return nil, notFound(err, waappv1.WaErrorCode_WA_ERROR_CODE_MESSAGE_NOT_FOUND, "WA contact not found")
 	}
@@ -98,14 +103,14 @@ func (s *PostgresStore) ListWAContacts(ctx context.Context, waAccountIDValue str
 	return items, nextCursor, nil
 }
 
-func (s *PostgresStore) DeleteWAContact(ctx context.Context, waAccountIDValue string, refs []string, deletedAt time.Time) (DeleteWAContactResult, error) {
+func (s *PostgresStore) DeleteWAContact(ctx context.Context, waAccountIDValue string, refs []string, deletedAt time.Time) (*waappv1.DeleteWAContactResponse, error) {
 	refs = shared.UniqueNonEmptyStrings(refs...)
 	if len(refs) == 0 {
-		return DeleteWAContactResult{}, nil
+		return nil, nil
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	messageTag, err := tx.Exec(ctx, `UPDATE wa_inbound_messages m
@@ -117,7 +122,7 @@ WHERE ms.message_session_id=m.message_session_id
   AND COALESCE(m.delete_status,'MESSAGE_DELETE_STATUS_NOT_DELETED')<>'MESSAGE_DELETE_STATUS_DELETED_FOR_ME'`,
 		waAccountIDValue, refs, waappv1.MessageDeleteStatus_MESSAGE_DELETE_STATUS_DELETED_FOR_ME.String(), deletedAt.UTC())
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	otpTag, err := tx.Exec(ctx, `DELETE FROM wa_otp_messages o
 WHERE o.wa_account_id=$1 AND (
@@ -133,43 +138,45 @@ WHERE o.wa_account_id=$1 AND (
   )
 )`, waAccountIDValue, refs)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	contactTag, err := tx.Exec(ctx, `DELETE FROM wa_contacts
 WHERE wa_account_id=$1
   AND (contact_id = ANY($2) OR jid = ANY($2) OR number = ANY($2))`,
 		waAccountIDValue, refs)
 	if err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return DeleteWAContactResult{}, err
+		return nil, err
 	}
-	return DeleteWAContactResult{
+	return &waappv1.DeleteWAContactResponse{
 		Deleted:             messageTag.RowsAffected()+otpTag.RowsAffected()+contactTag.RowsAffected() > 0,
-		DeletedMessageCount: int(messageTag.RowsAffected()),
+		DeletedMessageCount: int32(messageTag.RowsAffected()),
 	}, nil
 }
 
 func (s *PostgresStore) queryContactPage(ctx context.Context, waAccountIDValue string, cursor shared.KeysetCursor, limit int) (pgx.Rows, error) {
 	if !shared.HasKeysetCursor(cursor) {
-		return s.pool.Query(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 ORDER BY COALESCE(stats.last_message_at,c.updated_at) DESC, c.contact_id DESC LIMIT $2`, waAccountIDValue, limit)
+		return s.db.Query(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 ORDER BY COALESCE(stats.last_message_at,c.updated_at) DESC, c.contact_id DESC LIMIT $2`, waAccountIDValue, limit)
 	}
-	return s.pool.Query(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 AND (COALESCE(stats.last_message_at,c.updated_at), c.contact_id) < ($2, $3) ORDER BY COALESCE(stats.last_message_at,c.updated_at) DESC, c.contact_id DESC LIMIT $4`, waAccountIDValue, cursor.UpdatedAt, cursor.ID, limit)
+	return s.db.Query(ctx, contactSelectSQL+` WHERE c.wa_account_id=$1 AND (COALESCE(stats.last_message_at,c.updated_at), c.contact_id) < ($2, $3) ORDER BY COALESCE(stats.last_message_at,c.updated_at) DESC, c.contact_id DESC LIMIT $4`, waAccountIDValue, cursor.UpdatedAt, cursor.ID, limit)
 }
 
-const contactSelectSQL = `SELECT c.contact_id,c.wa_account_id,c.jid,c.number,c.display_name,c.wa_name,c.verified_name,c.profile_picture_id,c.kind,c.is_whatsapp_user,c.is_reachable,c.created_at,c.updated_at,COALESCE(stats.message_count,0),COALESCE(stats.unread_count,0),stats.last_message_at,COALESCE(latest.plaintext_value,''),COALESCE(latest.plaintext_redacted,''),COALESCE(latest.payload_ref,''),COALESCE(latest.encryption_state,'')
+const contactSelectSQL = `SELECT c.contact_id,c.wa_account_id,c.jid,c.number,c.display_name,c.wa_name,c.verified_name,c.profile_picture_id,c.kind,c.is_whatsapp_user,c.is_reachable,c.created_at,c.updated_at,COALESCE(stats.message_count,0),COALESCE(stats.unread_count,0),stats.last_message_at,COALESCE(latest.plaintext_value,''),COALESCE(latest.plaintext_redacted,''),COALESCE(latest.payload_ref,''),COALESCE(latest.encryption_state,''),c.saved_name
 FROM wa_contacts c
 LEFT JOIN LATERAL (
   SELECT COUNT(*) AS message_count,
          COUNT(*) FILTER (WHERE m.read_at IS NULL AND m.direction='ACCOUNT_MESSAGE_DIRECTION_INBOUND') AS unread_count,
          MAX(m.received_at) AS last_message_at
-  FROM wa_inbound_messages m
-  JOIN wa_message_sessions ms ON ms.message_session_id=m.message_session_id
-  WHERE ms.wa_account_id=c.wa_account_id
-    AND m.kind='INBOUND_MESSAGE_KIND_MESSAGE'
-    AND COALESCE(NULLIF(m.contact_ref,''), m.sender_ref) IN (c.jid, c.number, CASE WHEN c.number<>'' THEN c.number || '@s.whatsapp.net' ELSE '' END)
-    AND COALESCE(m.delete_status,'MESSAGE_DELETE_STATUS_NOT_DELETED')<>'MESSAGE_DELETE_STATUS_DELETED_FOR_ME'
+  FROM (
+   SELECT MAX(m.read_at) AS read_at,m.direction,MIN(m.received_at) AS received_at,
+          BOOL_OR(COALESCE(m.delete_status,'')='MESSAGE_DELETE_STATUS_DELETED_FOR_ME') AS removed
+   FROM wa_inbound_messages m JOIN wa_message_sessions ms ON ms.message_session_id=m.message_session_id
+   WHERE ms.wa_account_id=c.wa_account_id AND m.kind='INBOUND_MESSAGE_KIND_MESSAGE'
+     AND COALESCE(NULLIF(m.contact_ref,''),m.sender_ref) IN (c.jid,c.number,CASE WHEN c.number<>'' THEN c.number || '@s.whatsapp.net' ELSE '' END)
+   GROUP BY COALESCE(NULLIF(m.provider_message_id,''),m.message_id),m.sender_ref,m.direction
+  ) m WHERE NOT m.removed
 ) stats ON true
 LEFT JOIN LATERAL (
   SELECT d.plaintext_value,d.plaintext_redacted,m.payload_ref,m.encryption_state
@@ -195,5 +202,5 @@ type contactScanner interface {
 }
 
 func scanContactRow(scanner contactScanner, r *contactRow) error {
-	return scanner.Scan(&r.id, &r.waAccountIDValue, &r.jid, &r.number, &r.displayName, &r.waName, &r.verifiedName, &r.profilePictureID, &r.kind, &r.isWhatsAppUser, &r.isReachable, &r.createdAt, &r.updatedAt, &r.messageCount, &r.unreadCount, &r.lastMessageAt, &r.lastPlaintext, &r.lastRedacted, &r.lastPayloadRef, &r.lastEncryption)
+	return scanner.Scan(&r.id, &r.waAccountIDValue, &r.jid, &r.number, &r.displayName, &r.waName, &r.verifiedName, &r.profilePictureID, &r.kind, &r.isWhatsAppUser, &r.isReachable, &r.createdAt, &r.updatedAt, &r.messageCount, &r.unreadCount, &r.lastMessageAt, &r.lastPlaintext, &r.lastRedacted, &r.lastPayloadRef, &r.lastEncryption, &r.savedName)
 }

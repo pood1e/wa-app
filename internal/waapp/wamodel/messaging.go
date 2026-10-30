@@ -3,7 +3,7 @@ package wamodel
 import (
 	"strings"
 
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 // MaxMessageActionBatchSize bounds how many messages a single contact-scoped

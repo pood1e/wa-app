@@ -3,37 +3,33 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
 	"github.com/jackc/pgx/v5"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
-func (s *PostgresStore) DeleteWAAccount(ctx context.Context, waAccountIDValue string) error {
-	if s == nil || s.pool == nil {
-		return fmt.Errorf("wa-app postgres store is not configured")
+func (s *PostgresStore) DeleteWAAccount(ctx context.Context, id string) error {
+	if s.pool == nil {
+		return deletePostgresAccount(ctx, s.db, id)
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := lockWAAccount(ctx, tx, waAccountIDValue); err != nil {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return deletePostgresAccount(ctx, tx, id) })
+}
+func deletePostgresAccount(ctx context.Context, db DBTX, id string) error {
+	if err := lockWAAccount(ctx, db, id); err != nil {
 		return err
 	}
 	for _, statement := range waAccountDeleteStatements {
-		if _, err := tx.Exec(ctx, statement, waAccountIDValue); err != nil {
+		if _, err := db.Exec(ctx, statement, id); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM wa_accounts WHERE wa_account_id=$1`, waAccountIDValue); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	_, err := db.Exec(ctx, `DELETE FROM wa_accounts WHERE wa_account_id=$1`, id)
+	return err
 }
 
-func lockWAAccount(ctx context.Context, tx pgx.Tx, waAccountIDValue string) error {
+func lockWAAccount(ctx context.Context, tx DBTX, waAccountIDValue string) error {
 	var accountID string
 	err := tx.QueryRow(ctx, `SELECT wa_account_id FROM wa_accounts WHERE wa_account_id=$1 FOR UPDATE`, waAccountIDValue).Scan(&accountID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -60,11 +56,5 @@ var waAccountDeleteStatements = []string{
 	`DELETE FROM wa_message_sessions WHERE wa_account_id=$1`,
 	`DELETE FROM wa_otp_messages WHERE wa_account_id=$1`,
 	`DELETE FROM wa_login_states WHERE wa_account_id=$1`,
-	`DELETE FROM wa_registrations WHERE wa_account_id=$1`,
-	`DELETE FROM wa_verification_requests WHERE wa_account_id=$1`,
-	`DELETE FROM wa_account_probes WHERE wa_account_id=$1`,
-	`DELETE FROM wa_client_profile_states WHERE client_profile_id IN (
-		SELECT client_profile_id FROM wa_client_profiles WHERE wa_account_id=$1
-	)`,
 	`DELETE FROM wa_client_profiles WHERE wa_account_id=$1`,
 }

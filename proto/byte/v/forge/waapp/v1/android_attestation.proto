@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+// AndroidAttestationService owns device keys for one bounded onboarding flow.
+// Lost or expired contexts return NOT_FOUND; invalid bindings remain errors.
+service AndroidAttestationService {
+  rpc CreateContext(CreateAndroidAttestationContextRequest) returns (AndroidKeyAttestation);
+  rpc Sign(SignAndroidRegistrationRequest) returns (AndroidRegistrationSignature);
+  rpc RequestIntegrity(AndroidAttestationContext) returns (AndroidIntegrityResult);
+  rpc ReleaseContext(AndroidAttestationContext) returns (google.protobuf.Empty);
+}
+
+message AndroidAttestationContext {
+  string id = 1;
+}
+
+message CreateAndroidAttestationContextRequest {
+  // Registration Noise public key, before any hashing or Base64 encoding.
+  bytes registration_public_key = 1;
+}
+
+message AndroidKeyAttestation {
+  AndroidAttestationContext context = 1;
+  // Original SDK DER certificates, ordered from leaf to root.
+  repeated bytes certificate_chain = 2;
+}
+
+message SignAndroidRegistrationRequest {
+  AndroidAttestationContext context = 1;
+  // Exact UTF-8 ENC value, before the ENC= prefix and H field are added.
+  bytes message = 2;
+}
+
+message AndroidRegistrationSignature {
+  AndroidAttestationContext context = 1;
+  // Original SHA256withECDSA ASN.1 signature.
+  bytes signature = 2;
+}
+
+message AndroidIntegrityResult {
+  AndroidAttestationContext context = 1;
+  oneof outcome {
+    string token = 2;
+    int32 error_code = 3;
+  }
+}

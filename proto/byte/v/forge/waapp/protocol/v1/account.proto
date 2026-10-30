@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.protocol.v1;
+
+import "byte/v/forge/waapp/protocol/v1/handshake.proto";
+import "byte/v/forge/waapp/protocol/v1/account_review.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1;protocolv1";
+
+enum ClientPlatform {
+  CLIENT_PLATFORM_UNSPECIFIED = 0;
+  CLIENT_PLATFORM_ANDROID = 1;
+  CLIENT_PLATFORM_IOS = 2;
+}
+
+message CurveKeyPair {
+  bytes public = 1;
+  bytes private = 2;
+}
+
+message SignalPreKey {
+  int32 id = 1;
+  CurveKeyPair key_pair = 2;
+}
+
+// ML-KEM-1024 prekey. Public and private keys are raw FIPS 203 encodings.
+message SignalPQPreKey {
+  int32 id = 1;
+  bytes public = 2;
+  bytes private = 3;
+  bytes signature = 4;
+}
+
+// Private protocol material. Transport and storage must never log this message.
+message AccountCredentials {
+  CurveKeyPair chat_static = 1;
+  int32 registration_id = 2;
+  CurveKeyPair identity = 3;
+  SignalPreKey signed_pre_key = 4;
+  repeated SignalPreKey one_time_pre_keys = 5;
+  SignalPQPreKey pq_last_resort_pre_key = 6;
+  repeated SignalPQPreKey pq_one_time_pre_keys = 7;
+  CanonicalCredentials canonical = 8;
+}
+
+message CanonicalCredentials {
+  string user_id = 1;
+  string access_token = 2;
+  // Generated authentication secret, separate from the user's two-step password.
+  string credential_password = 3;
+  int64 expires_at = 4;
+}
+
+message ClientMetadata {
+  ClientPlatform platform = 1;
+  string app_version = 2;
+  string os_version = 3;
+  string manufacturer = 4;
+  string device = 5;
+  string os_build_number = 6;
+  string phone_id = 7;
+  string locale_language = 8;
+  string locale_country = 9;
+  string device_board = 10;
+  string device_experiment_id = 11;
+  string model_type = 12;
+  string mcc = 13;
+  string mnc = 14;
+  HandshakePQMode handshake_pq_mode = 15;
+  bytes noise_root_public_key = 16;
+}
+
+message ChatConnectionState {
+  string last_host = 1;
+  int32 last_port = 2;
+  string server_static_public = 3;
+  bytes server_static_pq_public = 4;
+}
+
+message SignalMessageKeys {
+  bytes cipher_key = 1;
+  bytes mac_key = 2;
+  bytes iv = 3;
+}
+
+message SignalChain {
+  string ratchet_key = 1;
+  string chain_key = 2;
+  int32 index = 3;
+  string root_key = 4;
+  map<uint32, SignalMessageKeys> skipped_message_keys = 5;
+}
+
+message SignalSession {
+  string sender = 1;
+  int32 version = 2;
+  string remote_identity_public = 3;
+  string root_key = 4;
+  string sender_ratchet_public = 5;
+  string sender_ratchet_private = 6;
+  SignalChain sender_chain = 7;
+  map<string, SignalChain> receiver_chains = 8;
+  optional int32 previous_counter = 9;
+  optional int32 remote_registration_id = 10;
+  string alice_base_key = 11;
+  SignalPendingPreKey pending_pre_key = 12;
+}
+
+message SignalPendingPreKey {
+  bytes base_key = 1;
+  uint32 signed_pre_key_id = 2;
+  optional uint32 pre_key_id = 3;
+}
+
+message AppStateKey {
+  string key_id = 1;
+  string key_data = 2;
+  string fingerprint = 3;
+  int64 timestamp = 4;
+}
+
+message AppStateCollection {
+  uint64 version = 1;
+  string hash = 2;
+  map<string, string> index_value_macs = 3;
+}
+
+message AppState {
+  map<string, AppStateKey> keys = 1;
+  map<string, AppStateCollection> collections = 2;
+}
+
+message ContactHint {
+  string lid_jid = 1;
+  string pn_jid = 2;
+  string display_name = 3;
+  string wa_name = 4;
+  string username = 5;
+  string verified_name = 6;
+}
+
+message MessagePayload {
+  string contact = 1;
+  string sender = 2;
+  string contact_pn = 3;
+  string sender_pn = 4;
+  string notify_name = 5;
+  string participant_username = 6;
+  repeated ContactHint contact_hints = 7;
+  string enc_type = 8;
+  string path = 9;
+  string payload = 10;
+  string provider_message_id = 11;
+  int64 provider_timestamp = 12;
+  uint32 retry_count = 13;
+}
+
+message SentMessage {
+  string provider_message_id = 1;
+  string contact_ref = 2;
+  // Serialized upstream waE2E.Message, retained for targeted Signal retries.
+  bytes message = 3;
+  repeated string recipient_devices = 4;
+  int64 timestamp = 5;
+  bool acknowledged = 6;
+  string edit = 7;
+}
+
+message SignalRetryState {
+  uint32 requested_count = 1;
+  uint32 responded_count = 2;
+  int64 updated_at = 3;
+  bytes pending_receipt = 4;
+  bool completed = 5;
+}
+
+message PendingSignalRetry {
+  // Upstream binary node encoding preserves optional receipt attributes.
+  bytes receipt = 1;
+  int64 received_at = 2;
+  uint32 attempts = 3;
+  bytes response = 4;
+}
+
+message PrivacyToken {
+  string token = 1;
+  int64 timestamp = 2;
+}
+
+message AccountRecoveryState {
+  ClientMetadata client = 1;
+  string registration_jid = 2;
+  string push_name = 3;
+  string chat_routing_info = 4;
+  ChatConnectionState chat_connection = 5;
+  map<string, string> remote_identities = 6;
+  map<string, SignalSession> sessions = 7;
+  AppState app_state = 8;
+  repeated ContactHint contact_hints = 9;
+  map<string, MessagePayload> message_payloads = 10;
+  map<string, string> message_plain_ref = 11;
+  map<string, PrivacyToken> privacy_tokens = 12;
+  // Serialized libsignal sender-key records, indexed by group and sending device.
+  map<string, bytes> sender_key_records = 13;
+  AccountReviewState account_review = 14;
+  map<string, SentMessage> sent_messages = 15;
+  map<string, SignalRetryState> signal_retries = 16;
+  map<string, PendingSignalRetry> pending_signal_retries = 17;
+}

@@ -3,14 +3,14 @@ package wamodel
 import (
 	"strings"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 const ContactMessagePreviewLimit = 96
 
 func ContactMessagePreview(plaintext string, redacted string, payloadRef string, state waappv1.MessageEncryptionState) string {
-	value := shared.FirstNonEmpty(AccountMessageDisplayText(plaintext), AccountMessageDisplayText(redacted), PayloadTextSummary(payloadRef), MessageStatePreview(state))
+	value := shared.FirstNonEmpty(plaintext, redacted, PayloadTextSummary(payloadRef), MessageStatePreview(state))
 	return TruncatePreview(value, ContactMessagePreviewLimit)
 }
 

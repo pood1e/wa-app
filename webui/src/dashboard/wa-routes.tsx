@@ -1,5 +1,5 @@
 import { createBrowserRouter } from 'react-router';
-import { WaAccountInfoRoute, WaCreateAccountRoute, WaHomeRoute, WaInboxRoute, WaLayout, WaNotFoundRoute } from './wa-page';
+import { WaAccountInfoRoute, WaCreateAccountRoute, WaHomeRoute, WaInboxRoute, WaLayout, WaNotFoundRoute, WaReloginAccountRoute } from './wa-page';
 
 export const waRouter = createBrowserRouter([
   {
@@ -12,6 +12,7 @@ export const waRouter = createBrowserRouter([
         path: 'accounts/:accountID',
         children: [
           { index: true, Component: WaAccountInfoRoute },
+          { path: 'login', Component: WaReloginAccountRoute },
           { path: 'chats', Component: WaInboxRoute },
           { path: 'chats/:contactID', Component: WaInboxRoute },
         ],

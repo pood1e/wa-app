@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.protocol.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1;protocolv1";
+
+enum AccountReviewStatus {
+  ACCOUNT_REVIEW_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_REVIEW_STATUS_NOT_REQUESTED = 1;
+  ACCOUNT_REVIEW_STATUS_IN_REVIEW = 2;
+  ACCOUNT_REVIEW_STATUS_REJECTED = 3;
+  ACCOUNT_REVIEW_STATUS_APPROVED = 4;
+  ACCOUNT_REVIEW_STATUS_UNAVAILABLE = 5;
+  ACCOUNT_REVIEW_STATUS_SUBMISSION_UNKNOWN = 6;
+}
+
+message AccountReview {
+  AccountReviewStatus status = 1;
+  google.protobuf.Timestamp checked_at = 2;
+}
+
+// Private recovery material; never included in account projections or errors.
+message AccountReviewState {
+  string token = 1;
+  AccountReview review = 2;
+}
+
+// Public application material extracted from the supported client build.
+message GraphQLApplicationMaterial {
+  string access_token = 1;
+}

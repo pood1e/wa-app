@@ -1,0 +1,27 @@
+type Query {
+  xwa2_get_twofa: Twofa
+  xwa2_has_password: HasPassword
+  xwa2_ent_get_certificates: Certificates!
+  xwa2_ent_create_ent: CanonicalUser!
+  xwa2_ent_generate_access_tokens: RefreshedCanonicalUser!
+  xwa2_set_twofa: SetTwofa!
+  xwa2_ent_request_recovery_nonce: RecoveryNonce
+  xwa2_ent_exchange_nonce_and_password: CanonicalUser
+}
+
+type Twofa {
+  twofa_enabled: Boolean!
+  twofa_methods: [TwofaMethod]
+  is_device_trusted: Boolean
+  latitude: Float
+  longitude: Float
+}
+type TwofaMethod { method: String! value: String! state: String }
+type HasPassword { has_password: Boolean! upgrade_needed: Boolean }
+type SetTwofa { success: Boolean! twofa_already_enabled: Boolean is_device_trusted: Boolean }
+type Certificates { encryption_pem: Certificate signature_pem: Certificate password_pem: Certificate }
+type Certificate { pem: String ttl: Int key_id: Int }
+type CanonicalUser { encrypted_fbid_and_access_token: EncryptedValue }
+type RefreshedCanonicalUser { encrypted_fbid_and_access_token: EncryptedValue! }
+type EncryptedValue { key: String! data: String! tag: String! nonce: String! algorithm: String! }
+type RecoveryNonce { fbid: String! }

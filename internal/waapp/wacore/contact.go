@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/waproto"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/waproto"
 )
 
 // WAContactHint is a normalized identity hint extracted from WhatsApp protocol

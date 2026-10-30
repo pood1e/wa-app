@@ -6,10 +6,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/wacore"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/wacore"
 )
 
 // ContactsFromInboundMessages projects the distinct WA contacts referenced by a

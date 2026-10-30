@@ -3,7 +3,7 @@ package store
 import (
 	"strings"
 
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 func sqliteInClause(expression string, values []string) (string, []any) {

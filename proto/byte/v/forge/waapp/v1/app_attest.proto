@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "google/protobuf/empty.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppAttestProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+// AppAttestService owns device keys for short-lived onboarding contexts.
+// Failures use gRPC status codes; callers explicitly retry uncertain outcomes.
+// Lost or expired contexts return NOT_FOUND; binding violations use FAILED_PRECONDITION.
+service AppAttestService {
+  rpc CreateContext(google.protobuf.Empty) returns (AppAttestContext);
+  rpc AttestKey(AttestAppAttestKeyRequest) returns (AttestAppAttestKeyResponse);
+  rpc GenerateAssertion(GenerateAppAttestAssertionRequest) returns (GenerateAppAttestAssertionResponse);
+  rpc ReleaseContext(AppAttestContext) returns (google.protobuf.Empty);
+}
+
+// AppAttestContext pins a device, app instance and key within one worker lifetime.
+message AppAttestContext {
+  string id = 1;
+}
+
+message AttestAppAttestKeyRequest {
+  AppAttestContext context = 1;
+  // SHA-256 of the registration Noise public key.
+  bytes client_data_hash = 2;
+}
+
+message AttestAppAttestKeyResponse {
+  AppAttestContext context = 1;
+  // Apple key identifier in the SDK's standard Base64 representation.
+  string key_identifier = 2;
+  // Original Apple key attestation CBOR for this context and client data hash.
+  bytes key_attestation = 3;
+}
+
+message GenerateAppAttestAssertionRequest {
+  AppAttestContext context = 1;
+  // SHA-256 of the exact binary ENC frame, before Base64 encoding.
+  bytes client_data_hash = 2;
+}
+
+message GenerateAppAttestAssertionResponse {
+  AppAttestContext context = 1;
+  // Raw App Attest CBOR, before JSON or Base64 wrapping.
+  bytes assertion = 2;
+}

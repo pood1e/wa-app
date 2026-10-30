@@ -7,22 +7,17 @@ import "byte/v/forge/waapp/v1/common.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "ByteVForge.WaApp.V1";
-option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
 option java_multiple_files = true;
 option java_outer_classname = "WaAppProfileProto";
 option java_package = "com.bytevforge.waapp.v1";
 option php_namespace = "ByteVForge\\WaApp\\V1";
 
 service WaProfileService {
-  rpc CreateWAAccount(CreateWAAccountRequest) returns (CreateWAAccountResponse);
   rpc GetWAAccount(GetWAAccountRequest) returns (GetWAAccountResponse);
   rpc ListWAAccounts(ListWAAccountsRequest) returns (ListWAAccountsResponse);
   rpc DeleteWAAccount(DeleteWAAccountRequest) returns (DeleteWAAccountResponse);
-  rpc DeletePendingRegistrationWAAccounts(DeletePendingRegistrationWAAccountsRequest) returns (DeletePendingRegistrationWAAccountsResponse);
-  rpc PrepareClientProfile(PrepareClientProfileRequest) returns (PrepareClientProfileResponse);
-  rpc GetClientProfile(GetClientProfileRequest) returns (GetClientProfileResponse);
-  rpc ListClientProfiles(ListClientProfilesRequest) returns (ListClientProfilesResponse);
-  rpc RetireClientProfile(RetireClientProfileRequest) returns (RetireClientProfileResponse);
+  rpc LogoutWAAccount(LogoutWAAccountRequest) returns (LogoutWAAccountResponse);
 }
 
 enum WAAccountStatus {
@@ -33,6 +28,7 @@ enum WAAccountStatus {
   WA_ACCOUNT_STATUS_PENDING_REGISTRATION = 4;
   // 账号已在其他设备注册(转出/被接管),本端登录态作废;再次注册到本端会回到 ACTIVE。
   WA_ACCOUNT_STATUS_TRANSFERRED_OUT = 5;
+  WA_ACCOUNT_STATUS_LOGGED_OUT = 6;
 }
 
 enum ClientProfileStatus {
@@ -72,37 +68,7 @@ message ClientProfile {
   google.protobuf.Timestamp last_used_at = 7;
   AuditStamp audit = 8;
   WaError last_error = 9;
-  DeviceFingerprint device_fingerprint = 10;
-}
-
-message DeviceFingerprint {
-  reserved 2, 3;
-
-  string fingerprint_id = 1;
-  string device_vendor = 4;
-  string device_model = 5;
-  string android_version = 6;
-  string fdid = 7;
-  string phone_sha256_prefix = 8;
-  string device_ram_gib = 9;
-  string mcc = 10;
-  string mnc = 11;
-  string sim_mcc = 12;
-  string sim_mnc = 13;
-  string network_radio_type = 14;
-  google.protobuf.Timestamp created_at = 15;
-}
-
-message CreateWAAccountRequest {
-  reserved 3;
-
-  RequestContext context = 1;
-  PhoneTarget phone = 2;
-}
-
-message CreateWAAccountResponse {
-  WAAccount account = 1;
-  WaError error = 2;
+  reserved 10;
 }
 
 message GetWAAccountRequest {
@@ -137,56 +103,12 @@ message DeleteWAAccountResponse {
   WaError error = 2;
 }
 
-message DeletePendingRegistrationWAAccountsRequest {
-  RequestContext context = 1;
-}
-
-message DeletePendingRegistrationWAAccountsResponse {
-  int32 deleted_count = 1;
-  WaError error = 2;
-}
-
-message PrepareClientProfileRequest {
+message LogoutWAAccountRequest {
   RequestContext context = 1;
   string wa_account_id = 2;
-  string protocol_profile_id = 3;
 }
 
-message PrepareClientProfileResponse {
-  ClientProfile client_profile = 1;
-  WaError error = 2;
-}
-
-message GetClientProfileRequest {
-  RequestContext context = 1;
-  string client_profile_id = 2;
-}
-
-message GetClientProfileResponse {
-  ClientProfile client_profile = 1;
-  WaError error = 2;
-}
-
-message ListClientProfilesRequest {
-  RequestContext context = 1;
-  string wa_account_id = 2;
-  int32 limit = 3;
-  string cursor = 4;
-}
-
-message ListClientProfilesResponse {
-  repeated ClientProfile client_profiles = 1;
-  string next_cursor = 2;
-  WaError error = 3;
-}
-
-message RetireClientProfileRequest {
-  RequestContext context = 1;
-  string client_profile_id = 2;
-  string reason = 3;
-}
-
-message RetireClientProfileResponse {
-  ClientProfile client_profile = 1;
+message LogoutWAAccountResponse {
+  WAAccount account = 1;
   WaError error = 2;
 }

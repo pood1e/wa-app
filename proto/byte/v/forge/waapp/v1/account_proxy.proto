@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+service WaAccountProxyService {
+  rpc GetAccountProxy(GetAccountProxyRequest) returns (AccountProxyResponse);
+  rpc SetAccountProxy(SetAccountProxyRequest) returns (AccountProxyResponse);
+}
+
+enum AccountProxyProtocol {
+  ACCOUNT_PROXY_PROTOCOL_UNSPECIFIED = 0;
+  ACCOUNT_PROXY_PROTOCOL_HTTP = 1;
+  ACCOUNT_PROXY_PROTOCOL_SOCKS5 = 2;
+}
+
+message AccountProxy {
+  AccountProxyProtocol protocol = 1;
+  string host = 2;
+  uint32 port = 3;
+  string username = 4;
+  // Read responses redact the password; an omitted password on update preserves
+  // the stored password for the same endpoint and username. An empty value clears it.
+  SensitiveText password = 5;
+}
+
+message GetAccountProxyRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+}
+
+message SetAccountProxyRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  // Absence restores the global proxy setting.
+  AccountProxy proxy = 3;
+}
+
+message AccountProxyResponse {
+  AccountProxy proxy = 1;
+  WaError error = 2;
+}

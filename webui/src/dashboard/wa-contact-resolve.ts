@@ -1,28 +1,26 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WAContact as WAContactRecord } from '../proto/byte/v/forge/waapp/v1/contacts';
 import { resolveWaContacts, waKeys } from './wa-api';
 
 const MAX_AUTO_RESOLVE_CONTACTS = 20;
+const AUTO_RESOLVE_CACHE_TIME = 5 * 60_000;
 
 export function useWaContactAutoResolve(accountID: string, records: WAContactRecord[]) {
   const queryClient = useQueryClient();
-  const targets = useMemo(() => unresolvedContactJIDs(records).slice(0, MAX_AUTO_RESOLVE_CONTACTS), [records]);
-  const signature = targets.join('\n');
-  const attempted = useRef('');
-  const { isPending, mutate } = useMutation({
-    mutationKey: waKeys.contactResolve(accountID),
-    mutationFn: () => resolveWaContacts(accountID, targets),
-    onSettled: async () => {
+  const targets = useMemo(() => unresolvedContactJIDs(records).sort().slice(0, MAX_AUTO_RESOLVE_CONTACTS), [records]);
+  useQuery({
+    queryKey: [...waKeys.contactResolve(accountID), targets],
+    enabled: (query) => Boolean(accountID && targets.length) && (!query.state.error || Date.now() - query.state.errorUpdatedAt >= AUTO_RESOLVE_CACHE_TIME),
+    staleTime: AUTO_RESOLVE_CACHE_TIME,
+    gcTime: AUTO_RESOLVE_CACHE_TIME,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const result = await resolveWaContacts(accountID, targets, signal);
       await queryClient.invalidateQueries({ queryKey: waKeys.contacts(accountID) });
+      return result;
     },
   });
-  useEffect(() => {
-    const key = `${accountID}:${signature}`;
-    if (!accountID || targets.length === 0 || isPending || attempted.current === key) return;
-    attempted.current = key;
-    mutate();
-  }, [accountID, isPending, mutate, signature, targets.length]);
 }
 
 function unresolvedContactJIDs(records: WAContactRecord[]) {

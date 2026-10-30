@@ -4,9 +4,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/wacore"
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/wacore"
 )
 
 func ContactMessageRefs(contact *waappv1.WAContact) []string {
@@ -41,6 +41,9 @@ func EnrichWAContactFallback(contact *waappv1.WAContact) {
 		return
 	}
 	NormalizeWAContactNames(contact)
+	if contact.GetSavedName() != "" {
+		return
+	}
 	contact.DisplayName = StoredWAContactDisplayName(contact.GetDisplayName(), contact.GetNumber())
 	if contact.GetDisplayName() != "" {
 		return

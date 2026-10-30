@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+service WaGroupService {
+  rpc CreateGroup(CreateGroupRequest) returns (GroupResponse);
+  rpc GetGroup(GetGroupRequest) returns (GroupResponse);
+  rpc ListJoinedGroups(ListJoinedGroupsRequest) returns (ListJoinedGroupsResponse);
+  rpc UpdateGroup(UpdateGroupRequest) returns (GroupMutationResponse);
+  rpc UpdateGroupParticipants(UpdateGroupParticipantsRequest) returns (GroupMutationResponse);
+  rpc GetGroupInvite(GetGroupInviteRequest) returns (GroupInviteResponse);
+  rpc InspectGroupInvite(GroupInviteRequest) returns (GroupResponse);
+  rpc JoinGroup(GroupInviteRequest) returns (JoinGroupResponse);
+  rpc LeaveGroup(GetGroupRequest) returns (GroupMutationResponse);
+  rpc ListGroupJoinRequests(GetGroupRequest) returns (ListGroupJoinRequestsResponse);
+}
+
+enum GroupMemberRole {
+  GROUP_MEMBER_ROLE_UNSPECIFIED = 0;
+  GROUP_MEMBER_ROLE_MEMBER = 1;
+  GROUP_MEMBER_ROLE_ADMIN = 2;
+  GROUP_MEMBER_ROLE_OWNER = 3;
+}
+
+enum GroupParticipantAction {
+  GROUP_PARTICIPANT_ACTION_UNSPECIFIED = 0;
+  GROUP_PARTICIPANT_ACTION_ADD = 1;
+  GROUP_PARTICIPANT_ACTION_REMOVE = 2;
+  GROUP_PARTICIPANT_ACTION_PROMOTE = 3;
+  GROUP_PARTICIPANT_ACTION_DEMOTE = 4;
+  GROUP_PARTICIPANT_ACTION_APPROVE_JOIN = 5;
+  GROUP_PARTICIPANT_ACTION_REJECT_JOIN = 6;
+}
+
+message GroupMember {
+  string member_ref = 1;
+  string phone_ref = 2;
+  reserved 3;
+  reserved "is_admin";
+  GroupMemberRole role = 4;
+}
+
+message GroupChat {
+  string group_ref = 1;
+  string name = 2;
+  repeated GroupMember members = 3;
+  string description = 4;
+  string description_id = 5;
+  bool announcement_only = 6;
+  bool locked = 7;
+  bool all_members_can_add = 8;
+  bool join_approval = 9;
+  string self_member_ref = 10;
+  int32 member_count = 11;
+}
+
+message CreateGroupRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string name = 3;
+  repeated string member_refs = 4;
+}
+
+message GetGroupRequest {
+  string wa_account_id = 1;
+  string group_ref = 2;
+  RequestContext context = 3;
+}
+
+message ListJoinedGroupsRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+}
+
+message ListJoinedGroupsResponse {
+  repeated GroupChat groups = 1;
+  WaError error = 2;
+}
+
+message UpdateGroupRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string group_ref = 3;
+  oneof change {
+    string name = 4;
+    string description = 5;
+    bool announcement_only = 6;
+    bool locked = 7;
+    bool all_members_can_add = 8;
+    bool join_approval = 9;
+  }
+}
+
+message UpdateGroupParticipantsRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string group_ref = 3;
+  repeated string member_refs = 4;
+  GroupParticipantAction action = 5;
+}
+
+message GroupParticipantResult {
+  string member_ref = 1;
+  WaError error = 2;
+}
+
+message GroupMutationResponse {
+  repeated GroupParticipantResult participant_results = 1;
+  WaError error = 2;
+}
+
+message GetGroupInviteRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string group_ref = 3;
+  bool regenerate = 4;
+}
+
+message GroupInviteResponse {
+  string link = 1;
+  WaError error = 2;
+}
+
+message GroupInviteRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string link = 3;
+}
+
+message JoinGroupResponse {
+  GroupChat group = 1;
+  bool pending_approval = 2;
+  WaError error = 3;
+}
+
+message GroupJoinRequest {
+  GroupMember member = 1;
+  google.protobuf.Timestamp requested_at = 2;
+}
+
+message ListGroupJoinRequestsResponse {
+  repeated GroupJoinRequest requests = 1;
+  WaError error = 2;
+}
+
+message GroupResponse {
+  GroupChat group = 1;
+  WaError error = 2;
+  repeated GroupParticipantResult participant_results = 3;
+}

@@ -1,76 +1,114 @@
 # wa-app
 
-`wa-app` 是 WA 应用链路服务，提供账号与资料管理、号码探测、注册、登录态检查、长连接会话、消息与联系人处理、账号在线态与转出检测，并内置管理 dashboard。
+自托管 WhatsApp 账号管理与消息服务，提供 Dashboard、Proto gRPC 和同源 HTTP API。
 
-> [!CAUTION]
-> 使用本项目即表示你同意 [NOTICE](./NOTICE) 的全部条款。本项目仅限协议建模、教学演示、授权安全研究和内部非商业验证；禁止用于商业用途、未授权目标或违反第三方服务条款的场景。
+## 架构与功能
 
-## 功能
+- wa-account-add-service：Android / iOS 账号注册、旧设备验证码转移、两步验证密码和账号交付。
+- wa-app-service：账号接纳、登录恢复、消息、联系人、群管理、账号设置及 Dashboard。
+- 长期数据显式选择 PostgreSQL 或 SQLite；短期缓存与连接租约默认使用内存，可选 Valkey。
+- Proto 统一定义领域模型、RPC 和私有恢复状态；设备 SDK 能力通过独立 worker 接入。
 
-- 账号与资料：维护 WAAccount、客户端 profile、注册记录和登录态投影；支持资料编辑、头像、换绑号码，注册时从多机型画像池分配设备指纹。
-- 号码与注册：支持号码探测、SMS 探测、注册请求、OTP 提交和登录态检查。
-- 账号安全：两步验证（2FA PIN）状态管理与登录适配。
-- 连接与消息：支持长连接会话、消息接收与 ack、1:1 文本消息发送、会话查看、联系人解析（usync）和头像拉取。
-- 在线态与转出检测：账号在线态由长连接实况派生；转出/远程登出按 device_removed / device_logout 判定并周期复核，避免状态漂移。
-- 数据提取：从消息中提取 OTP/Flag 候选值，并按敏感数据规则保存引用或脱敏投影。
-- 管理界面：提供 dashboard，用于账号、联系人、消息、连接状态、安全和账号资料操作。
+Dashboard 提供账号代理、重新登录、账号复核、邮箱验证、联系人与群资料管理、聊天分页、未读计数和消息回执。消息支持文本、商家模板正文、引用、编辑、撤回和反应；媒体消息展示类型与说明。
 
-## 部署方式
+服务依赖、数据生命周期和代码导航见[架构说明](docs/architecture/README.md)。
 
-推荐使用本仓库提供的 Docker Compose 启动服务：
+## 快速启动
 
-```sh
-cp .env.example .env
-docker compose pull
-docker compose up -d
-```
+需要 Git、Docker Compose v2 和 OpenSSL。已有数据库先按[迁移说明](docs/migration.md)完成停写、备份和离线转换。
 
-如果你只是本地快速启动，也可以直接 `docker compose up -d`（不创建 `.env` 也能启动，未配置值使用 compose 默认值）。
+~~~sh
+git clone git@github.com:pood1e/wa-app.git
+cd wa-app
+cat > .env <<EOF
+WA_SERVICE_TOKEN=$(openssl rand -hex 32)
+WA_APP_STORE=sqlite
+EOF
+docker compose up -d --build --wait
+~~~
 
-默认端口（固定）：
+Dashboard：<http://127.0.0.1:8080>。SQLite 数据保存在 wa-app-data 命名卷，容器内路径为 /var/lib/wa-app/wa-app.sqlite3。
 
-- Dashboard：`http://127.0.0.1:8080`（`docker-compose.yml` 映射）
-- gRPC：`127.0.0.1:50091`
+~~~sh
+docker compose ps
+docker compose logs -f wa-app wa-account-add
+docker compose down
+~~~
 
-若你确实要改主机映射端口，请直接改 `docker-compose.yml` 的 `ports` 行（非配置项）。
+两服务共享 WA_SERVICE_TOKEN。Compose 将 Dashboard 与运行服务 gRPC 绑定到本机，添加服务通过容器网络提供 gRPC。
 
-### 配置
+## 部署配置
 
-`.env` 中保留少量运行必需配置：
+配置写入根目录 .env，完整示例见 [.env.example](.env.example)。
 
-- `WA_APP_IMAGE_TAG`：镜像标签，生产建议使用固定版本。
-- `WA_APP_AUTH_PASSWORD`：可选 dashboard 单密码登录；为空则关闭鉴权。
-- `WA_APP_DATA_DIR`：容器内持久化目录；默认 `/var/lib/wa-app`。
-- `WA_APP_PG_DSN`：可选 PostgreSQL DSN；为空时使用内置 SQLite 持久化。
-- `WA_APP_REDIS_URL`：可选 Redis URL；为空时使用内置 SQLite 运行态存储。
-- `WA_COMMON_PROXY`：可选 WA 出站代理；配置后所有出站走该共享代理，为空则直连。
-- `WA_APP_DEVICE_PROFILES_FILE`：可选设备画像池文件路径；为空时使用内置多机型画像。
-- `WA_APP_PLAY_INTEGRITY_API_URL` / `WA_APP_PLAY_INTEGRITY_API_TOKEN`：可选 Play Integrity token service；两者都为空时注册页不显示选择控件并默认走 GPIA `error_code`。
+| 变量 | 用途 |
+| --- | --- |
+| WA_SERVICE_TOKEN | 两服务共享认证，必填 |
+| WA_APP_STORE | SQL 后端：sqlite 或 postgres，必填 |
+| WA_APP_SQLITE_FILE | SQLite 文件路径 |
+| WA_APP_PG_DSN / POSTGRES_PASSWORD | PostgreSQL 连接与 Compose 数据库密码 |
+| WA_APP_EPHEMERAL_STORE | 短期状态：memory（默认）或 valkey |
+| WA_APP_VALKEY_URL | Valkey 连接 |
+| WA_APP_AUTH_PASSWORD | Dashboard 访问密码 |
+| WA_COMMON_PROXY | 默认 HTTP CONNECT / SOCKS5 出站代理 |
+| WA_ACCOUNT_ADD_TARGET / WA_ACCOUNT_RUNTIME_TARGET | 两服务 gRPC 地址，Compose 自动设置 |
+| WA_ACCOUNT_ADD_ANDROID_SIGNER_TARGET / WA_ACCOUNT_ADD_IOS_SIGNER_TARGET | 设备 worker 地址 |
+| WA_APP_IMAGE_TAG / WA_ACCOUNT_ADD_IMAGE_TAG | 两服务镜像标签，默认 latest |
 
-PostgreSQL 和 Redis 都是可选组件。需要启用时，在 `docker-compose.yml` 中取消对应服务注释，并在 `.env` 中填写 `WA_APP_PG_DSN` / `WA_APP_REDIS_URL`。
+PostgreSQL 部署设置 WA_APP_STORE=postgres 和 WA_APP_PG_DSN；使用 Compose 数据库时同时设置 POSTGRES_PASSWORD，连接主机为 postgres、用户和数据库为 wa_app。启动依赖后再启动两个服务：
 
-### 源码构建镜像
+~~~sh
+docker compose --profile postgres up -d --wait postgres
+docker compose --profile postgres up -d --build --wait wa-app wa-account-add
+~~~
 
-`Dockerfile` 支持在 `wa-app` 仓库内直接构建，不依赖 `common-lib` 构建上下文：
+Valkey 部署设置 WA_APP_EPHEMERAL_STORE=valkey 与 WA_APP_VALKEY_URL=valkey://valkey:6379/0，然后启动对应 profile：
 
-```sh
-docker build -t wa-app-service:local .
-```
+~~~sh
+docker compose --profile valkey up -d --wait valkey
+docker compose up -d --build --wait wa-app wa-account-add
+~~~
 
-在 `byte-v-forge` 聚合目录构建也可用：
+账号级代理可在添加页指定或在详情页修改，优先于 WA_COMMON_PROXY；未配置代理时直连。代理凭证保存在 SQL，公开读取时脱敏。
 
-```sh
-docker build -f wa-app/Dockerfile -t wa-app-service:local .
-```
+设备 worker 的构建与连接见 [Android 签名服务](tools/android-attestation/README.md)和 [iOS App Attest worker](tools/ios-attestation/README.md)。目标需能从添加服务容器访问，证明能力按配置与设备可用性启用，上游响应决定账号流程结果。
 
-## 逆向工程
+### 发布镜像
 
-WA APK 逆向工程、字段形状对齐记录、patch 模板和本地分析脚本统一维护在私有仓库：
+| 服务 | 镜像 |
+| --- | --- |
+| 账号运行 | ghcr.io/pood1e/wa-app/wa-app-service |
+| 账号添加 | ghcr.io/pood1e/wa-app/wa-account-add-service |
 
-- https://github.com/byte-v-forge/wa-reverse
+镜像支持 linux/amd64 与 linux/arm64。main 发布 latest 和 sha-<提交短哈希>，v* 标签发布对应版本。
 
-`wa-app` 只保留运行时代码和服务说明，不提交 APK、反编译产物、抓包、WAMSYS blob 或逆向记录。
+~~~sh
+docker compose pull wa-app wa-account-add
+docker compose up -d --no-build --wait wa-app wa-account-add
+~~~
 
-## 友情链接
+## 开发与检查
 
-- [LINUX DO - 新的理想型社区](https://linux.do/)
+需要 Go 1.27.2、Node.js 24 和含标准 Proto 定义的 protoc。Debian / Ubuntu 使用 protobuf-compiler libprotobuf-dev。
+
+~~~sh
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+scripts/generate-proto.sh
+npm --prefix webui ci
+npm --prefix webui run proto
+scripts/lint-go.sh
+go test -race ./cmd/... ./internal/...
+npm --prefix webui test
+npm --prefix webui run lint
+npm --prefix webui run build
+~~~
+
+WA_TEST_PG_DSN 与 WA_TEST_VALKEY_URL 用于真实后端集成测试，数据库测试使用独立临时 schema。[CI](.github/workflows/test.yml)执行同一组检查。
+
+| 入口 | 内容 |
+| --- | --- |
+| [架构说明](docs/architecture/README.md) | 服务依赖、数据生命周期和代码导航 |
+| [数据迁移](docs/migration.md) | 停写、备份、转换、切换与恢复 |
+| [Proto 契约](proto/byte/v/forge/waapp) | 公共 API 与私有协议状态 |
+| [iOS 注册联调](cmd/wa-ios-onboarding/README.md) | 命令行输入和流程控制 |

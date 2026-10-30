@@ -3,10 +3,11 @@ package wamodel
 import (
 	"strings"
 
-	waappv1 "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/byte-v-forge/wa-app/internal/waapp/shared"
-	"github.com/byte-v-forge/wa-app/internal/waapp/wacore"
 	"google.golang.org/protobuf/proto"
+
+	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
+	"github.com/pood1e/wa-app/internal/waapp/wacore"
 )
 
 type WAKnownContactAlias struct {
@@ -42,6 +43,14 @@ func NormalizeWAContactNames(contact *waappv1.WAContact) {
 	contact.DisplayName = ResolvedWAContactName(contact.GetDisplayName(), contact.GetNumber())
 	contact.WaName = ResolvedWAContactName(contact.GetWaName(), contact.GetNumber())
 	contact.VerifiedName = ResolvedWAContactName(contact.GetVerifiedName(), contact.GetNumber())
+	contact.SavedName = wacore.WAContactName(contact.GetSavedName())
+	if contact.GetSavedName() != "" {
+		contact.DisplayName = contact.GetSavedName()
+		return
+	}
+	if contact.GetKind() == waappv1.WAContactKind_WA_CONTACT_KIND_GROUP && contact.GetDisplayName() == FallbackWAContactDisplayName(contact.GetKind(), contact.GetJid(), contact.GetNumber()) {
+		contact.DisplayName = ""
+	}
 	if alias == "" {
 		return
 	}

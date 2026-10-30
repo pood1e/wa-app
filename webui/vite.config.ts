@@ -31,6 +31,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('/node_modules/@assistant-ui/') || id.includes('/node_modules/assistant-')) return 'assistant-ui';
+          if (/\/node_modules\/(react|react-dom|react-router|scheduler)\//.test(id)) return 'react';
+          if (id.includes('/node_modules/libphonenumber-js/')) return 'phone';
           return undefined;
         },
       },
