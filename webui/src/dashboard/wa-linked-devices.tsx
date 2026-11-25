@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, ImagePlus, Loader2, Monitor, RefreshCw, Unplug } from 'lucide-react';
+import { Eraser, ExternalLink, ImagePlus, Loader2, Monitor, RefreshCw, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,18 +16,21 @@ export function WaLinkedDevices({ accountID, online, onDone, onError }: Props) {
   const [reading, setReading] = useState(false);
   const [decodedImage, setDecodedImage] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const clearQR = () => {
+    setQR(''); setDecodedImage(false);
+    if (fileInput.current) fileInput.current.value = '';
+  };
   const devices = useQuery({ queryKey: queryKey(accountID), queryFn: ({ signal }) => listWaLinkedDevices(accountID, signal), enabled: online, retry: false, staleTime: 30_000 });
   const reportError = (error: unknown) => onError(error instanceof Error ? error.message : '设备关联操作失败');
   const refresh = () => cache.invalidateQueries({ queryKey: queryKey(accountID) });
   const link = useMutation({
-    mutationFn: () => linkWaDevice(accountID, qr.trim()), retry: false,
+    mutationFn: (code: string) => linkWaDevice(accountID, code), retry: false, gcTime: 0,
     onSuccess: (response) => {
-      setQR(''); setDecodedImage(false);
       void refresh();
       if (response.device?.device_ref) onDone(response.error?.message ? '设备已关联，请刷新设备列表确认' : '主设备已授权，WhatsApp Web 正在初始化');
       else onError(response.outcome_unknown ? '关联结果尚未确认，请检查 WhatsApp Web 并刷新设备列表，保留当前 Web 页面' : response.error?.message || '服务端尚未确认设备关联');
     },
-    onError: (error) => { setQR(''); setDecodedImage(false); reportError(error); void refresh(); },
+    onError: (error) => { reportError(error); void refresh(); },
   });
   const unlink = useMutation({
     mutationFn: (device: LinkedDevice) => unlinkWaDevice(accountID, device.device_ref), retry: false,
@@ -43,7 +46,13 @@ export function WaLinkedDevices({ accountID, online, onDone, onError }: Props) {
       setQR(await readPairingQRCode(file)); setDecodedImage(true);
     } catch (error) { reportError(error); } finally { setReading(false); }
   };
-  const submit = (event: FormEvent) => { event.preventDefault(); link.mutate(); };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const code = qr.trim();
+    if (!online || busy || !code) return;
+    clearQR();
+    link.mutate(code, { onSettled: () => link.reset() });
+  };
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -73,6 +82,7 @@ export function WaLinkedDevices({ accountID, online, onDone, onError }: Props) {
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label="选择 Web 二维码截图" disabled={!online || busy} onChange={(event) => void readImage(event)} />
           <Button type="button" variant="outline" disabled={!online || busy} onClick={() => fileInput.current?.click()}>{reading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}上传二维码截图</Button>
           <Input type="password" className="min-w-48 flex-1" aria-label="WhatsApp Web 二维码内容" placeholder={decodedImage ? '已识别二维码，点击关联设备' : '粘贴二维码内容'} value={decodedImage ? '' : qr} maxLength={8192} autoComplete="off" spellCheck={false} disabled={!online || busy} onChange={(event) => { setQR(event.target.value); setDecodedImage(false); }} />
+          <Button type="button" size="icon-sm" variant="ghost" aria-label="清空二维码" title="清空二维码" disabled={busy || !qr} onClick={clearQR}><Eraser className="size-4" /></Button>
           <Button type="submit" disabled={!online || busy || !qr.trim()}>{link.isPending ? <><Loader2 className="size-4 animate-spin" />正在关联</> : '关联设备'}</Button>
         </div>
       </form>

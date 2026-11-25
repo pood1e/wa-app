@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Send } from 'lucide-react';
+import { CheckCircle2, Eraser, Send } from 'lucide-react';
 import type { AccountSettingsOperation } from '../proto/byte/v/forge/waapp/v1/account_settings';
 import { remainingSeconds } from './wa-time';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,10 @@ export function WaEmailOtpForm({ operation, code, busy, onCodeChange, onRequest,
         <Button type="button" variant="outline" disabled={busy || remaining > 0} onClick={onRequest}>
           <Send size={14} />{remaining > 0 ? `${remaining} 秒后重发` : '重新发送'}
         </Button>
-        <Input value={code} onChange={(event) => onCodeChange(event.target.value)} inputMode="numeric" autoComplete="one-time-code" type="password" maxLength={6} disabled={busy} placeholder="6 位验证码" aria-label="邮箱验证码" />
+        <div className="relative">
+          <Input className="pr-10" value={code} onChange={(event) => onCodeChange(event.target.value)} inputMode="numeric" autoComplete="one-time-code" type="password" maxLength={6} disabled={busy} placeholder="6 位验证码" aria-label="邮箱验证码" />
+          <Button type="button" className="absolute right-1 top-1/2 -translate-y-1/2" size="icon-sm" variant="ghost" aria-label="清空验证码" title="清空验证码" disabled={busy || !code} onClick={() => onCodeChange('')}><Eraser size={14} /></Button>
+        </div>
         <Button type="button" disabled={busy || !/^\d{6}$/.test(code)} onClick={onVerify}><CheckCircle2 size={14} />验证</Button>
       </div>
     </div>

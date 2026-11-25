@@ -106,10 +106,9 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
     onError: handleError,
   });
   const otpVerify = useMutation({
-    mutationFn: () => verifyWaAccountEmailOtp(account, emailOtp),
+    mutationFn: (code: string) => verifyWaAccountEmailOtp(account, code), gcTime: 0,
     onSuccess: (resp) => {
       const status = resp.operation?.status;
-      setEmailOtp('');
       setEmailOtpOperation(resp.operation);
       setEmailOtpVisible(shouldShowEmailOtp(status));
       if (status === AccountSettingsOperationStatus.ACCOUNT_SETTINGS_OPERATION_STATUS_VERIFIED) { patchStatus({ email_configured: true, email_verified: true }); setEmailOpen(false); }
@@ -195,7 +194,7 @@ export function WaAccountSecurityPanel({ account, onDone, onError }: Props) {
           </DialogHeader>
           <EmailForm email={email} busy={busy} configured={emailConfigured} onEmailChange={(value) => { setEmail(value); setEmailOtp(''); setEmailOtpVisible(false); }} onSubmit={(event) => submit(event, emailSet.mutate)} />
           {emailOtpVisible && (
-            <WaEmailOtpForm operation={emailOtpOperation} code={emailOtp} busy={busy} onCodeChange={setEmailOtp} onRequest={() => otpRequest.mutate()} onVerify={() => otpVerify.mutate()} />
+            <WaEmailOtpForm operation={emailOtpOperation} code={emailOtp} busy={busy} onCodeChange={setEmailOtp} onRequest={() => { setEmailOtp(''); otpRequest.mutate(); }} onVerify={() => { const code = emailOtp; setEmailOtp(''); otpVerify.mutate(code, { onSettled: () => otpVerify.reset() }); }} />
           )}
         </DialogContent>
       </Dialog>

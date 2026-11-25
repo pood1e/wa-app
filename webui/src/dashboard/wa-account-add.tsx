@@ -171,7 +171,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
         })}</div>}
         {transfer && !waiting && !accepted && <p className="text-center text-xs leading-5 text-muted-foreground">请保持旧设备上的 WhatsApp 在线，以接收转移验证码。</p>}
         {noTransferChannel && <p role="status" className="text-sm text-muted-foreground">该号码当前没有可用的旧设备验证通道，可返回注册账号使用短信或语音验证。</p>}
-        {waiting && !transferChallenge && <WaRegistrationOtpCard value={otp} length={flow?.verification?.expected_code_length || 6} method={flow?.verification?.delivery_method} busy={busy || disabled} onChange={setOtp} onSubmit={() => void run(() => submitAccountAddCode(flow?.flow_id || '', otp))} />}
+        {waiting && !transferChallenge && <WaRegistrationOtpCard value={otp} length={flow?.verification?.expected_code_length || 6} method={flow?.verification?.delivery_method} busy={busy || disabled} onChange={setOtp} onSubmit={() => { const code = otp; setOtp(''); void run(() => submitAccountAddCode(flow?.flow_id || '', code)); }} />}
         {waitingPassword && <form className="grid gap-4 rounded-xl border border-border p-5" onSubmit={(event) => { event.preventDefault(); if (!busy && !disabled && password && passwordWait === 0) void run(() => submitAccountAddPassword(flow?.flow_id || '', password)); }}>
           <p className="text-sm leading-6 text-muted-foreground">手机号已验证。输入该账号的两步验证密码，继续完成登录。</p>
           <Field><FieldLabel htmlFor="wa-account-password">两步验证密码</FieldLabel><Input id="wa-account-password" type="password" autoComplete="current-password" maxLength={64} value={password} disabled={busy || disabled} onChange={(event) => setPassword(event.target.value)} /></Field>
