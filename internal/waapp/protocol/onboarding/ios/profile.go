@@ -9,13 +9,27 @@ import (
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 )
 
-//go:embed ios-26.40.77.pb
+const defaultAppVersion = "26.46.72"
+
+//go:embed ios-26.46.72.pb
 var profileData string
+
+//go:embed ios-business-26.46.72.pb
+var businessProfileData string
 
 // DefaultProfile returns an independent copy of the bundled iOS build material.
 func DefaultProfile() (*protocolv1.IOSRegistrationProfile, error) {
+	return decodeProfile(profileData)
+}
+
+// DefaultBusinessProfile returns the bundled iOS Business build material.
+func DefaultBusinessProfile() (*protocolv1.IOSRegistrationProfile, error) {
+	return decodeProfile(businessProfileData)
+}
+
+func decodeProfile(data string) (*protocolv1.IOSRegistrationProfile, error) {
 	profile := new(protocolv1.IOSRegistrationProfile)
-	if err := proto.Unmarshal([]byte(profileData), profile); err != nil {
+	if err := proto.Unmarshal([]byte(data), profile); err != nil {
 		return nil, errors.New("decode bundled iOS registration profile")
 	}
 	if err := validateProfile(profile); err != nil {

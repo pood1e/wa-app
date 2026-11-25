@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.protocol.v1;
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1;protocolv1";
+
+message LinkedDeviceState {
+  // Serialized upstream WAAdv.ADVSignedKeyIndexList.
+  bytes signed_key_index_list = 1;
+  repeated LinkedDeviceRecord devices = 2;
+  bytes history_thread_secret = 3;
+}
+
+message LinkedDeviceRecord {
+  string device_ref = 1;
+  uint32 key_index = 2;
+  // Serialized upstream WACompanionReg.DeviceProps.
+  bytes companion_props = 3;
+  int64 linked_at = 4;
+  bool bootstrap_sent = 5;
+  int64 bootstrap_retry_at = 6;
+}

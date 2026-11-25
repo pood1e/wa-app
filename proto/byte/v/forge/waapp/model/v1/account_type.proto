@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.model.v1;
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1;modelv1";
+
+enum WAAccountType {
+  WA_ACCOUNT_TYPE_PERSONAL = 0;
+  WA_ACCOUNT_TYPE_BUSINESS = 1;
+}
+
+message BusinessRegistration {
+  string name = 1;
+}

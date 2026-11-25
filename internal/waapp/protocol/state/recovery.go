@@ -48,6 +48,8 @@ func (s NativeState) Export() (*protocolv1.AccountCredentials, *protocolv1.Accou
 		return nil, nil, err
 	}
 	recovery.Client = s.Client
+	recovery.BusinessIdentity = proto.CloneOf(s.BusinessIdentity)
+	recovery.LinkedDevices = proto.CloneOf(s.LinkedDevices)
 	if s.AccountReview != nil {
 		recovery.AccountReview = proto.Clone(s.AccountReview).(*protocolv1.AccountReviewState)
 	}
@@ -75,6 +77,8 @@ func Restore(credentials *protocolv1.AccountCredentials, recovery *protocolv1.Ac
 		return NativeState{}, err
 	}
 	s.Client = proto.Clone(recovery.GetClient()).(*protocolv1.ClientMetadata)
+	s.BusinessIdentity = proto.CloneOf(recovery.GetBusinessIdentity())
+	s.LinkedDevices = proto.CloneOf(recovery.GetLinkedDevices())
 	if recovery.GetAccountReview() != nil {
 		s.AccountReview = proto.Clone(recovery.GetAccountReview()).(*protocolv1.AccountReviewState)
 	}

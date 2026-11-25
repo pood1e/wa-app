@@ -66,6 +66,10 @@ func acceptMaterial(ctx context.Context, tx AccountTransaction, material *waappv
 			return nil, err
 		}
 	}
+	account.AccountType = material.GetRecovery().GetClient().GetAccountType()
+	if material.GetRecovery().GetBusinessIdentity() != nil {
+		account.DisplayName = material.GetRecovery().GetPushName()
+	}
 	if err := tx.SaveWAAccount(ctx, account); err != nil {
 		return nil, err
 	}
@@ -120,7 +124,7 @@ func retireAccountLogins(ctx context.Context, tx AccountTransaction, accountID s
 
 func acceptedProtocolProfile(ctx context.Context, tx AccountTransaction, material *waappv1.AcceptedAccountMaterial, now time.Time) (string, error) {
 	client := material.GetRecovery().GetClient()
-	id := "waproto_" + shared.StableID(client.GetPlatform().String()+":"+client.GetAppVersion())
+	id := "waproto_" + shared.StableID(client.GetPlatform().String()+":"+client.GetAccountType().String()+":"+client.GetAppVersion())
 	artifactID := "waart_" + shared.StableID(id)
 	artifact := &waappv1.AppArtifact{ArtifactId: artifactID, Label: client.GetPlatform().String(), VersionLabel: client.GetAppVersion(), ObservedAt: timestamppb.New(now)}
 	if err := tx.SaveAppArtifact(ctx, artifact); err != nil {

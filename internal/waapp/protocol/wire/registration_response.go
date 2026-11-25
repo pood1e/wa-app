@@ -24,7 +24,7 @@ var (
 	registrationResponseParameters = []string{
 		"cc", "in", "lg", "lc", "fdid", "expid", "id", "backup_token", "token", "authkey",
 		"e_ident", "e_keytype", "e_regid", "e_skey_id", "e_skey_val", "e_skey_sig", "type", "method",
-		"code", "auth_response", "context", "login", "advertising_id", "access_session_id", "gpia", "H",
+		"code", "auth_response", "context", "login", "advertising_id", "access_session_id", "gpia", "H", "vname",
 	}
 )
 

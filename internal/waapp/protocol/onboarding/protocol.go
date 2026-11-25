@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	"github.com/pood1e/wa-app/internal/waapp/protocol/attestation"
@@ -18,19 +19,20 @@ import (
 )
 
 type engineCore struct {
-	activeProxyURL     string
-	http               *wire.NativeHTTPClient
-	clock              shared.Clock
-	ids                shared.IDGenerator
-	current            state.NativeState
-	build              *protocolv1.AndroidBuildMaterial
-	parameters         *protocolv1.AndroidClientParameters
-	token              string
-	attestor           *android.Attestor
-	verification       *protocolv1.AndroidVerificationContext
-	verificationMethod waappv1.VerificationDeliveryMethod
-	passwordRequired   bool
-	passwordRetryAt    time.Time
+	activeProxyURL       string
+	http                 *wire.NativeHTTPClient
+	clock                shared.Clock
+	ids                  shared.IDGenerator
+	current              state.NativeState
+	build                *protocolv1.AndroidBuildMaterial
+	parameters           *protocolv1.AndroidClientParameters
+	token                string
+	attestor             *android.Attestor
+	verification         *protocolv1.AndroidVerificationContext
+	verificationMethod   waappv1.VerificationDeliveryMethod
+	requiredVerification waappv1.VerificationDeliveryMethod
+	passwordRequired     bool
+	passwordRetryAt      time.Time
 }
 
 // AndroidFlow owns the material of one registration or transfer operation.
@@ -61,6 +63,7 @@ func NewAndroidFlow(ctx context.Context, phone *waappv1.PhoneTarget, build *prot
 	build = proto.Clone(build).(*protocolv1.AndroidBuildMaterial)
 	parameters = proto.Clone(parameters).(*protocolv1.AndroidClientParameters)
 	parameters.Metadata.AppVersion = build.GetAppVersion()
+	parameters.Metadata.AccountType = build.GetAccountType()
 	clock, ids := dependencies.Clock, dependencies.IDs
 	if clock == nil {
 		clock = shared.SystemClock{}
@@ -81,6 +84,22 @@ func NewAndroidFlow(ctx context.Context, phone *waappv1.PhoneTarget, build *prot
 	current.Client.Mnc = current.Profile.AdditionalMapFields["mnc"]
 	current.Client.HandshakePqMode = parameters.GetOptions().GetHandshakePqMode()
 	current.Client.NoiseRootPublicKey = build.GetNoiseRootPublicKey()
+	if build.GetAccountType() == modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		name, err := shared.RequireBusinessName(parameters.GetBusiness().GetName())
+		if err != nil {
+			return nil, err
+		}
+		private, err := current.Signal.Identity.PrivateBytes()
+		if err != nil {
+			return nil, err
+		}
+		certificate, err := wire.NewBusinessCertificate(private, name)
+		if err != nil {
+			return nil, err
+		}
+		current.PushName = name
+		current.BusinessIdentity = &protocolv1.BusinessIdentity{Certificate: certificate}
+	}
 	if parameters.GetOptions().GetEnablePqRegistration() {
 		private, err := current.Signal.Identity.PrivateBytes()
 		if err != nil {
@@ -167,6 +186,7 @@ func (e *AndroidFlow) Close() error {
 	}
 	e.current = state.NativeState{}
 	e.verification = nil
+	e.requiredVerification = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 	e.verificationMethod = 0
 	e.passwordRequired, e.passwordRetryAt = false, time.Time{}
 	e.token = ""

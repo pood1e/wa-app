@@ -55,7 +55,7 @@ func peerPreKeyFromResponse(response wire.ChatdNode, target string) (*prekey.Bun
 }
 
 func initializeOutboundSession(current *state.NativeState, target string, bundle *prekey.Bundle) error {
-	ensureSignalLogger()
+	wire.EnsureSignalLogger()
 	remoteIdentity := bundle.IdentityKey().PublicKey().Serialize()
 	if err := validateRemoteSignalIdentity(current, target, remoteIdentity); err != nil {
 		return err

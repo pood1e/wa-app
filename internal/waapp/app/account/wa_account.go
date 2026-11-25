@@ -16,6 +16,7 @@ func withWAAccountStatus(account *waappv1.WAAccount, status waappv1.WAAccountSta
 	}
 	next := wamodel.NewWAAccount(wamodel.WAAccountID(account), account.GetDisplayName(), account.GetPhone(), status, shared.NewAuditStamp(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(account.GetTwoFactorAuth())
+	next.AccountType = account.GetAccountType()
 	return next
 }
 
@@ -26,6 +27,7 @@ func withWAAccountDisplayName(account *waappv1.WAAccount, displayName string, up
 	}
 	next := wamodel.NewWAAccount(wamodel.WAAccountID(account), displayName, account.GetPhone(), wamodel.WAAccountStatus(account), shared.NewAuditStamp(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(account.GetTwoFactorAuth())
+	next.AccountType = account.GetAccountType()
 	return next
 }
 
@@ -36,6 +38,7 @@ func withWAAccountTwoFactorAuthStatus(account *waappv1.WAAccount, status *waappv
 	}
 	next := wamodel.NewWAAccount(wamodel.WAAccountID(account), account.GetDisplayName(), account.GetPhone(), wamodel.WAAccountStatus(account), shared.NewAuditStamp(createdAt, updatedAt))
 	next.TwoFactorAuth = cloneTwoFactorAuthStatus(status)
+	next.AccountType = account.GetAccountType()
 	return next
 }
 

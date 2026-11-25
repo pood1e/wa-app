@@ -4,52 +4,13 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
-	"github.com/pood1e/wa-app/internal/waapp/protocol/state"
 	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 	"github.com/pood1e/wa-app/internal/waapp/wacore"
 )
 
-type groupSession struct {
-	connection *Connection
-	current    state.NativeState
-	changed    bool
-}
-
-func groupOperation[T any](ctx context.Context, c *Connection, work func(context.Context, *groupSession) (T, error)) (result T, err error) {
-	ctx, finish := c.operationContext(ctx)
-	defer finish()
-	if err = c.LockInteractiveIQLocked(ctx); err != nil {
-		return result, err
-	}
-	defer c.UnlockInteractiveIQLocked()
-	current, err := c.loadState(ctx, c.Input.ClientProfileID)
-	if err != nil {
-		return result, err
-	}
-	session := &groupSession{connection: c, current: current}
-	result, err = work(ctx, session)
-	if session.changed {
-		checkpoint, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		err = errors.Join(err, c.SaveState(checkpoint, c.Input.ClientProfileID, session.current))
-	}
-	return result, err
-}
-
-func (s *groupSession) query(ctx context.Context, request wire.ChatdNode) (wire.ChatdNode, error) {
-	c := s.connection
-	response, update, err := c.sendIQLocked(ctx, s.current, c.Input.RegisteredIdentityID, c.Input.AppVersion, request, "group request timed out")
-	s.changed = ApplyChatdSessionUpdateState(&s.current, update) || s.changed
-	if err == nil {
-		err = ChatdIQError(response)
-	}
-	return response, err
-}
-
-func (s *groupSession) read(ctx context.Context, ref string) (*waappv1.GroupChat, error) {
+func (s *connectionState) read(ctx context.Context, ref string) (*waappv1.GroupChat, error) {
 	request, err := groupInfoIQ(ref, s.connection.ids.NewID("wa_group_"))
 	if err != nil {
 		return nil, err
@@ -61,7 +22,7 @@ func (s *groupSession) read(ctx context.Context, ref string) (*waappv1.GroupChat
 	return s.parse(response)
 }
 
-func (s *groupSession) parse(response wire.ChatdNode) (*waappv1.GroupChat, error) {
+func (s *connectionState) parse(response wire.ChatdNode) (*waappv1.GroupChat, error) {
 	group, err := parseGroupResponse(response)
 	if err != nil {
 		return nil, err
@@ -78,7 +39,7 @@ func (s *groupSession) parse(response wire.ChatdNode) (*waappv1.GroupChat, error
 }
 
 func (c *Connection) CreateGroup(ctx context.Context, request *waappv1.CreateGroupRequest) (*waappv1.GroupResponse, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (*waappv1.GroupResponse, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (*waappv1.GroupResponse, error) {
 		children, err := s.participantNodes(request.GetMemberRefs(), "create")
 		if err != nil {
 			return nil, err
@@ -97,11 +58,11 @@ func (c *Connection) CreateGroup(ctx context.Context, request *waappv1.CreateGro
 }
 
 func (c *Connection) GetGroup(ctx context.Context, ref string) (*waappv1.GroupChat, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (*waappv1.GroupChat, error) { return s.read(ctx, ref) })
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (*waappv1.GroupChat, error) { return s.read(ctx, ref) })
 }
 
 func (c *Connection) ListJoinedGroups(ctx context.Context) ([]*waappv1.GroupChat, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) ([]*waappv1.GroupChat, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) ([]*waappv1.GroupChat, error) {
 		response, err := s.query(ctx, s.request("get", "g.us", wire.ChatdNode{Tag: "participating", Content: []wire.ChatdNode{{Tag: "participants"}, {Tag: "description"}}}))
 		if err != nil {
 			return nil, err
@@ -126,7 +87,7 @@ func (c *Connection) ListJoinedGroups(ctx context.Context) ([]*waappv1.GroupChat
 }
 
 func (c *Connection) LeaveGroup(ctx context.Context, ref string) error {
-	_, err := groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (struct{}, error) {
+	_, err := withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (struct{}, error) {
 		target, err := normalizeGroupRef(ref)
 		if err != nil {
 			return struct{}{}, err
@@ -159,6 +120,6 @@ func groupContactHints(group *waappv1.GroupChat) []wacore.WAContactHint {
 	return hints
 }
 
-func (s *groupSession) request(kind, target string, content wire.ChatdNode) wire.ChatdNode {
+func (s *connectionState) request(kind, target string, content wire.ChatdNode) wire.ChatdNode {
 	return groupIQ(s.connection.ids.NewID("wa_group_"), kind, target, content)
 }

@@ -1,4 +1,4 @@
-import type { GetTwoFactorAuthStatusResponse, RemoveAccountProfilePictureResponse, RequestAccountEmailOtpResponse, SetAccountEmailResponse, SetAccountProfileNameResponse, SetAccountProfilePictureResponse, SetTwoFactorAuthSettingsResponse, VerifyAccountEmailOtpResponse } from '../proto/byte/v/forge/waapp/v1/account_settings';
+import type { SetAccountBusinessNameResponse, GetTwoFactorAuthStatusResponse, RemoveAccountProfilePictureResponse, RequestAccountEmailOtpResponse, SetAccountEmailResponse, SetAccountProfileNameResponse, SetAccountProfilePictureResponse, SetTwoFactorAuthSettingsResponse, VerifyAccountEmailOtpResponse } from '../proto/byte/v/forge/waapp/v1/account_settings';
 import type { AccountReviewResponse, SubmitAccountReviewRequest } from '../proto/byte/v/forge/waapp/v1/account_review';
 import type { AccountProxy, AccountProxyResponse } from '../proto/byte/v/forge/waapp/v1/account_proxy';
 import type { DeleteWAContactResponse, ListWAContactsResponse, ResolveWAContactsResponse, SaveWAContactRequest, SaveWAContactResponse, SubscribeWAContactPresenceResponse } from '../proto/byte/v/forge/waapp/v1/contacts';
@@ -193,6 +193,9 @@ export async function verifyWaAccountEmailOtp(account: WAAccount, code: string) 
 }
 export async function setWaAccountProfileName(account: WAAccount, displayName: string) {
   return requireAccountSettingsResponse(await api<SetAccountProfileNameResponse>('/api/wa/account-settings/profile/name', { method: 'POST', body: JSON.stringify({ selector: waAccountSettingsSelector(account), display_name: displayName }) }));
+}
+export async function setWaAccountBusinessName(account: WAAccount, businessName: string) {
+  return requireAccountSettingsResponse(await api<SetAccountBusinessNameResponse>('/api/wa/account-settings/business/name', { method: 'POST', body: JSON.stringify({ selector: waAccountSettingsSelector(account), business_name: businessName }) }));
 }
 export async function setWaAccountProfilePicture(account: WAAccount, input: { image_base64: string; content_type: string }) {
   return requireAccountSettingsResponse(await api<SetAccountProfilePictureResponse>('/api/wa/account-settings/profile/picture', { method: 'POST', body: JSON.stringify({ selector: waAccountSettingsSelector(account), image: input.image_base64, content_type: input.content_type }) }));

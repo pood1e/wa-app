@@ -51,7 +51,7 @@ func SafeResponseSnippet(text string) string {
 		return ""
 	}
 	text = waproto.SensitiveDigitsPattern.ReplaceAllString(text, "<digits>")
-	for _, marker := range []string{"token", "auth", "key", "code", "sig"} {
+	for _, marker := range []string{"token", "auth", "key", "code", "sig", "cert"} {
 		if strings.Contains(strings.ToLower(text), marker) {
 			return "<redacted>"
 		}

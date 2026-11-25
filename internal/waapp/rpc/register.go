@@ -12,6 +12,7 @@ func RegisterRuntime(registrar grpc.ServiceRegistrar, application *account.Appli
 	waappv1.RegisterWaAccountProxyServiceServer(registrar, &accountProxyServiceServer{application: application})
 	waappv1.RegisterWaAccountReviewServiceServer(registrar, &accountReviewServiceServer{application: application})
 	waappv1.RegisterWaGroupServiceServer(registrar, &groupServiceServer{application: application})
+	waappv1.RegisterWaLinkedDeviceServiceServer(registrar, &linkedDeviceServiceServer{application: application})
 	waappv1.RegisterWaAccountSettingsServiceServer(registrar, &waAccountSettingsServiceServer{application: application})
 	waappv1.RegisterWaMessagingServiceServer(registrar, &waMessagingServiceServer{application: application})
 	waappv1.RegisterWaProfileServiceServer(registrar, &waProfileServiceServer{application: application})

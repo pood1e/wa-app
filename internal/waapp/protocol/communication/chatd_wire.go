@@ -30,8 +30,9 @@ func LoginPayload(identity pwire.LoginIdentity, state pstate.NativeState, versio
 func ChatdUserAgentForState(current pstate.NativeState, version string) pwire.UserAgentConfig {
 	p := current.Client
 	return pwire.UserAgentConfig{
-		Platform: p.GetPlatform(),
-		Version:  shared.FirstNonEmpty(p.GetAppVersion(), version), OsVersion: p.GetOsVersion(), Manufacturer: p.GetManufacturer(), Device: p.GetDevice(),
+		Platform:    p.GetPlatform(),
+		AccountType: p.GetAccountType(),
+		Version:     shared.FirstNonEmpty(p.GetAppVersion(), version), OsVersion: p.GetOsVersion(), Manufacturer: p.GetManufacturer(), Device: p.GetDevice(),
 		OsBuildNumber: p.GetOsBuildNumber(), PhoneID: p.GetPhoneId(), LocaleLang: p.GetLocaleLanguage(), LocaleCountry: p.GetLocaleCountry(),
 		DeviceBoard: p.GetDeviceBoard(), DeviceExpID: p.GetDeviceExperimentId(), ModelType: p.GetModelType(), Mcc: p.GetMcc(), Mnc: p.GetMnc(),
 	}

@@ -50,7 +50,7 @@ func (e *accountSettingsService) applyAccountSecurity(ctx context.Context, input
 	return accountSecurityResult(status, err)
 }
 
-func (e *accountSettingsService) accountSecurityMEX(ctx context.Context, input wacore.EngineAccountSettingsInput, state *pstate.NativeState, sender AccountSettingsIQSender, op security.Operation, variables any) (json.RawMessage, error) {
+func (e *engineCore) accountSecurityMEX(ctx context.Context, input wacore.EngineAccountSettingsInput, state *pstate.NativeState, sender AccountSettingsIQSender, op security.Operation, variables any) (json.RawMessage, error) {
 	typ, err := op.ResponseType()
 	if err != nil {
 		return nil, errors.New("account security response schema is unavailable")

@@ -34,7 +34,7 @@ func (s *ChatdSession) parseSignalRetry(node wire.ChatdNode) (signalRetryRequest
 		return signalRetryRequest{}, false
 	}
 	source, ok := s.messageSource(node)
-	if !ok || source.sender.IsEmpty() || source.fromMe {
+	if !ok || source.sender.IsEmpty() || source.fromMe && source.sender.Device == 0 {
 		return signalRetryRequest{}, false
 	}
 	return signalRetryRequest{chat: source.chat, sender: source.sender, id: id, count: uint32(count)}, true

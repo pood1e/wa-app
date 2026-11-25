@@ -15,8 +15,11 @@ import (
 
 	"github.com/google/uuid"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
+	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
+	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
 type parameter struct{ name, value string }
@@ -42,6 +45,8 @@ type registrationParameters struct {
 	token        string
 	phoneID      string
 	experimentID string
+	businessName string
+	certificate  []byte
 }
 
 func newRegistrationParameters(phone *waappv1.PhoneTarget, profile *protocolv1.IOSRegistrationProfile, keys *protocolv1.RegistrationKeyMaterial, now time.Time) (registrationParameters, error) {
@@ -93,6 +98,18 @@ func newRegistrationParameters(phone *waappv1.PhoneTarget, profile *protocolv1.I
 		id:    percentBytes(ids[16:]),
 		token: registrationToken(profile, phone.GetNationalNumber()),
 	}
+	if profile.GetClient().GetAccountType() == modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		result.businessName, err = shared.RequireBusinessName(profile.GetBusiness().GetName())
+		if err != nil {
+			return registrationParameters{}, err
+		}
+		// iOS registers an empty name; w:biz confirms the requested name after login.
+		result.certificate, err = wire.NewBusinessCertificate(keys.GetIdentityPrivateKey(), "")
+		if err != nil {
+			return registrationParameters{}, err
+		}
+		result.base = append(result.base, parameter{"vname", base64.URLEncoding.EncodeToString(result.certificate)})
+	}
 	return result, nil
 }
 
@@ -134,6 +151,9 @@ func percentBytes(value []byte) string {
 }
 
 func validateRegistration(phone *waappv1.PhoneTarget, profile *protocolv1.IOSRegistrationProfile) error {
+	if profile.GetBusiness() != nil && profile.GetClient().GetAccountType() != modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		return errors.New("business registration requires an iOS Business build")
+	}
 	if !decimal(phone.GetCountryCallingCode(), 1, 3) || !decimal(phone.GetNationalNumber(), 4, 14) ||
 		len(phone.GetCountryCallingCode())+len(phone.GetNationalNumber()) > 15 {
 		return errors.New("registration phone is invalid")
@@ -145,10 +165,16 @@ func validateRegistration(phone *waappv1.PhoneTarget, profile *protocolv1.IOSReg
 }
 
 func validateProfile(profile *protocolv1.IOSRegistrationProfile) error {
-	if profile.GetAppVersion() != "26.40.77" || len(profile.GetBuildTokenSecret()) != 40 || len(profile.GetBuildHash()) != 32 {
+	switch profile.GetClient().GetAccountType() {
+	case modelv1.WAAccountType_WA_ACCOUNT_TYPE_PERSONAL, modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS:
+	default:
+		return errors.New("iOS registration account type is invalid")
+	}
+	if profile.GetAppVersion() != defaultAppVersion || len(profile.GetBuildTokenSecret()) != 40 {
 		return errors.New("iOS registration build profile is invalid")
 	}
-	if _, err := hex.DecodeString(profile.GetBuildHash()); err != nil {
+	hash := md5.Sum([]byte("2." + profile.GetAppVersion()))
+	if profile.GetBuildHash() != hex.EncodeToString(hash[:]) {
 		return errors.New("iOS registration build hash is invalid")
 	}
 	if len(profile.GetUserAgent()) > 256 || !strings.Contains(profile.GetUserAgent(), profile.GetAppVersion()) ||

@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	"github.com/pood1e/wa-app/internal/waapp/shared"
 	"github.com/pood1e/wa-app/internal/waapp/wamodel"
@@ -113,6 +114,7 @@ type waAccountRow struct {
 	national                 string
 	iso2                     string
 	status                   string
+	accountType              string
 	twoFactorConfigured      sql.NullBool
 	twoFactorEmailConfigured sql.NullBool
 	twoFactorEmailAddress    sql.NullString
@@ -129,6 +131,7 @@ func (r waAccountRow) toProto() *waappv1.WAAccount {
 		NationalNumber:     r.national,
 		CountryIso2:        r.iso2,
 	}, waappv1.WAAccountStatus(waappv1.WAAccountStatus_value[r.status]), shared.NewAuditStamp(r.createdAt, r.updatedAt))
+	account.AccountType = modelv1.WAAccountType(modelv1.WAAccountType_value[r.accountType])
 	if r.twoFactorConfigured.Valid || r.twoFactorEmailConfigured.Valid || r.twoFactorEmailAddress.Valid || r.twoFactorEmailVerified.Valid || r.twoFactorEmailConfirmed.Valid {
 		account.TwoFactorAuth = &waappv1.TwoFactorAuthStatus{
 			Configured:      r.twoFactorConfigured.Bool,

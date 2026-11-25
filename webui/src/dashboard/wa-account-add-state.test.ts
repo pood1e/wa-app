@@ -3,13 +3,15 @@ import { ClientPlatform } from '../proto/byte/v/forge/waapp/protocol/v1/account'
 import { AccountAddStatus, type AccountAddFlow } from '../proto/byte/v/forge/waapp/v1/account_add';
 import { WaErrorCode } from '../proto/byte/v/forge/waapp/v1/common';
 import { AccountProbeStatus, VerificationDeliveryMethod as Method, VerificationRequestStatus } from '../proto/byte/v/forge/waapp/v1/registration';
-import { addingError, addingStatus, canRecoverRegistration, canSubmitCode, canSubmitPassword, channelState, isTransferMethod } from './wa-account-add-state';
+import { addingError, addingStatus, canRecoverRegistration, canSubmitCode, canSubmitPassword, channelState, isTransferMethod, verificationMethodVisible } from './wa-account-add-state';
 
 const observed = '2026-01-01T00:00:00Z';
 const start = Date.parse(observed);
 
 function readyFlow(): AccountAddFlow {
   return {
+    business: undefined,
+    required_verification_method: Method.VERIFICATION_DELIVERY_METHOD_UNSPECIFIED,
     flow_id: 'synthetic-flow', phone: undefined, platform: ClientPlatform.CLIENT_PLATFORM_ANDROID, password_challenge: undefined,
     status: AccountAddStatus.ACCOUNT_ADD_STATUS_READY, source: { registration: {} },
     probe: {
@@ -23,6 +25,20 @@ function readyFlow(): AccountAddFlow {
 }
 
 describe('verification availability', () => {
+  it('shows a required next channel across the original adding source without resending a code', () => {
+    const flow = readyFlow();
+    flow.source = { transfer: {} };
+    flow.required_verification_method = Method.VERIFICATION_DELIVERY_METHOD_SMS;
+    flow.last_error = { code: WaErrorCode.WA_ERROR_CODE_VERIFICATION_REQUIRED, message: 'additional verification', retryable: true };
+    expect(verificationMethodVisible(flow, Method.VERIFICATION_DELIVERY_METHOD_SMS, true)).toBe(true);
+    expect(verificationMethodVisible(flow, Method.VERIFICATION_DELIVERY_METHOD_WA_OLD, true)).toBe(false);
+    expect(verificationMethodVisible(flow, Method.VERIFICATION_DELIVERY_METHOD_VOICE, true)).toBe(false);
+    expect(channelState(flow, Method.VERIFICATION_DELIVERY_METHOD_VOICE, start).available).toBe(false);
+    expect(addingError(flow, start)).toContain('下一步身份验证');
+    expect(addingError(flow, start)).not.toContain('校验未通过');
+    expect(addingStatus(flow)).toBe('继续验证身份');
+    expect(canSubmitCode(flow)).toBe(false);
+  });
   it('uses the password step after first-factor verification and for unknown password results', () => {
     const flow = readyFlow();
     flow.status = AccountAddStatus.ACCOUNT_ADD_STATUS_WAITING_PASSWORD;

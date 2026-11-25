@@ -7,11 +7,14 @@ import (
 	"strings"
 	"time"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
+	"go.mau.fi/whatsmeow/proto/waWa6"
 )
 
 type UserAgentConfig struct {
 	Platform      protocolv1.ClientPlatform
+	AccountType   modelv1.WAAccountType
 	Version       string
 	OsVersion     string
 	Manufacturer  string
@@ -69,11 +72,17 @@ func BuildAppVersion(version string) []byte {
 
 func BuildUserAgentPayload(cfg UserAgentConfig) []byte {
 	out := []byte{}
-	platform := uint64(0)
+	platform := waWa6.ClientPayload_UserAgent_ANDROID
 	if cfg.Platform == protocolv1.ClientPlatform_CLIENT_PLATFORM_IOS {
-		platform = 1
+		platform = waWa6.ClientPayload_UserAgent_IOS
 	}
-	out = append(out, PbVarintField(1, platform)...)
+	if cfg.AccountType == modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		platform = waWa6.ClientPayload_UserAgent_SMB_ANDROID
+		if cfg.Platform == protocolv1.ClientPlatform_CLIENT_PLATFORM_IOS {
+			platform = waWa6.ClientPayload_UserAgent_SMB_IOS
+		}
+	}
+	out = append(out, PbVarintField(1, uint64(platform))...)
 	out = append(out, PbBytesField(2, BuildAppVersion(cfg.Version))...)
 	out = append(out, PbStringField(3, cfg.Mcc)...)
 	out = append(out, PbStringField(4, cfg.Mnc)...)

@@ -38,7 +38,7 @@ func groupInviteCode(value string) (string, error) {
 }
 
 func (c *Connection) GetGroupInvite(ctx context.Context, request *waappv1.GetGroupInviteRequest) (string, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (string, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (string, error) {
 		target, err := normalizeGroupRef(request.GetGroupRef())
 		if err != nil {
 			return "", err
@@ -64,7 +64,7 @@ func (c *Connection) GetGroupInvite(ctx context.Context, request *waappv1.GetGro
 }
 
 func (c *Connection) InspectGroupInvite(ctx context.Context, link string) (*waappv1.GroupChat, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (*waappv1.GroupChat, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (*waappv1.GroupChat, error) {
 		code, err := groupInviteCode(link)
 		if err != nil {
 			return nil, err
@@ -78,7 +78,7 @@ func (c *Connection) InspectGroupInvite(ctx context.Context, link string) (*waap
 }
 
 func (c *Connection) JoinGroup(ctx context.Context, link string) (*waappv1.JoinGroupResponse, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (*waappv1.JoinGroupResponse, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (*waappv1.JoinGroupResponse, error) {
 		code, err := groupInviteCode(link)
 		if err != nil {
 			return nil, err

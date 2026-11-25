@@ -3,6 +3,7 @@ syntax = "proto3";
 package byte.v.forge.waapp.v1;
 
 import "byte/v/forge/waapp/v1/account_settings.proto";
+import "byte/v/forge/waapp/model/v1/account_type.proto";
 import "byte/v/forge/waapp/v1/common.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -56,6 +57,7 @@ message WAAccount {
   WAAccountStatus status = 4;
   AuditStamp audit = 5;
   TwoFactorAuthStatus two_factor_auth = 6;
+  byte.v.forge.waapp.model.v1.WAAccountType account_type = 8;
 }
 
 message ClientProfile {

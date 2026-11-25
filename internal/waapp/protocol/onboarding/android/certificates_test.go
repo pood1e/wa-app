@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 )
 
@@ -71,6 +72,17 @@ func TestCertificateProofRequiresMatchingKeyApplicationAndTrust(t *testing.T) {
 	otherApplication, otherRoots := syntheticCertificates(t, challenge, profile, "com.example.other", now)
 	if _, err := verifyCertificates(otherApplication, publicKey, profile, now, otherRoots); err == nil {
 		t.Fatal("unrelated application identity was accepted")
+	}
+	business := &protocolv1.AndroidBuildMaterial{VersionCode: 123, SigningCertificate: profile.SigningCertificate, AccountType: modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS}
+	if _, err := verifyCertificates(chain, publicKey, business, now, roots); err == nil {
+		t.Fatal("personal SDK proof was accepted for the business application")
+	}
+	businessChain, businessRoots := syntheticCertificates(t, challenge, business, "com.whatsapp.w4b", now)
+	if _, err := verifyCertificates(businessChain, publicKey, business, now, businessRoots); err != nil {
+		t.Fatal("business application proof was rejected", err)
+	}
+	if _, err := verifyCertificates(businessChain, publicKey, profile, now, businessRoots); err == nil {
+		t.Fatal("business SDK proof was accepted for the personal application")
 	}
 	for _, tc := range []struct {
 		name    string

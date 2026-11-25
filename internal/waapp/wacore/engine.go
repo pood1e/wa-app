@@ -153,6 +153,7 @@ type EngineAccountTransferChallengeResult struct {
 
 type EngineRegisterResult struct {
 	PasswordChallenge *waappv1.AccountAddPasswordChallenge
+	NextVerification  *waappv1.VerificationMethodStatus
 	OutcomeUnknown    bool
 	Status            waappv1.RegistrationStatus
 	RetryAfter        time.Duration

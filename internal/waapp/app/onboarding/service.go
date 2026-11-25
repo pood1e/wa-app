@@ -203,6 +203,7 @@ func (f *flow) finish(status waappv1.AccountAddStatus) {
 	f.snapshot.TransferChallenge = nil
 	f.snapshot.PasswordChallenge = nil
 	f.snapshot.Verification = nil
+	f.snapshot.RequiredVerificationMethod = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 	f.snapshot.Status = status
 }
 

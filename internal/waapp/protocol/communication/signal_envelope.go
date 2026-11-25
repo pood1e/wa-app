@@ -12,10 +12,11 @@ import (
 	"go.mau.fi/libsignal/util/optional"
 
 	"github.com/pood1e/wa-app/internal/waapp/protocol/state"
+	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 )
 
 func encryptDirectSignalPayload(current *state.NativeState, target string, plaintext []byte) ([]byte, string, error) {
-	ensureSignalLogger()
+	wire.EnsureSignalLogger()
 	key, session, exists := ExactSignalSession(current.Signal.Sessions, target)
 	if !exists {
 		return nil, "", errors.New("peer Signal session is missing")

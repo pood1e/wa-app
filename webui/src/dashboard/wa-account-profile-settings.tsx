@@ -3,7 +3,8 @@ import AvatarEditor, { type AvatarEditorRef } from 'react-avatar-editor';
 import { Camera, Check, Loader2, Pencil, UserRound, X } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
-import { setWaAccountProfileName, setWaAccountProfilePicture, waAccountID, waAccountProfilePictureURL } from './wa-api';
+import { WAAccountType } from '../proto/byte/v/forge/waapp/model/v1/account_type';
+import { setWaAccountBusinessName, setWaAccountProfileName, setWaAccountProfilePicture, waAccountID, waAccountProfilePictureURL } from './wa-api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { WaAvatarImage } from './wa-avatar-image';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,9 @@ type Props = {
 
 export function WaAccountProfileSettings({ account, onDone, onError, onAccountChanged, onAvatarChanged }: Props) {
   const queryClient = useQueryClient();
+  const business = account.account_type === WAAccountType.WA_ACCOUNT_TYPE_BUSINESS;
+  const nameLimit = business ? 256 : 25;
+  const nameLabel = business ? '商家名称' : '你的名字';
   const savedName = (account.display_name || '').trim();
   const [currentName, setCurrentName] = useState(savedName);
   const [displayName, setDisplayName] = useState(savedName);
@@ -39,8 +43,8 @@ export function WaAccountProfileSettings({ account, onDone, onError, onAccountCh
     mutationFn: () => {
       const name = displayName.trim();
       if (!name) throw new Error('账号名称不能为空');
-      if ([...name].length > 25) throw new Error('账号名称不能超过 25 个字符');
-      return setWaAccountProfileName(account, name);
+      if ([...name].length > nameLimit) throw new Error(`账号名称不能超过 ${nameLimit} 个字符`);
+      return business ? setWaAccountBusinessName(account, name) : setWaAccountProfileName(account, name);
     },
     onSuccess: () => {
       const nextName = displayName.trim();
@@ -95,14 +99,14 @@ export function WaAccountProfileSettings({ account, onDone, onError, onAccountCh
         </Button>
         {currentName && !nameEditing ? (
           <div className="flex w-full min-w-0 items-center gap-2 border-b border-border pb-3">
-            <div className="min-w-0 flex-1"><p className="mb-2 text-xs text-primary">你的名字</p><p className="truncate text-base">{currentName}</p></div>
+            <div className="min-w-0 flex-1"><p className="mb-2 text-xs text-primary">{nameLabel}</p><p className="truncate text-base">{currentName}</p></div>
             <Button className="rounded-full text-muted-foreground" size="icon" variant="ghost" type="button" title="修改名称" aria-label="修改名称" onClick={() => { setDisplayName(currentName); setNameEditing(true); }}><Pencil size={16} /></Button>
           </div>
         ) : (
           <form className="flex w-full min-w-0 items-center gap-2" onSubmit={(event) => submitName(event, () => nameMutation.mutate())}>
-            <Input className="min-w-0 flex-1 rounded-none border-0 border-b border-input bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-primary dark:bg-transparent" value={displayName} maxLength={25} placeholder="你的名字" aria-label="账号名称" disabled={nameBusy} onChange={(event) => setDisplayName(event.target.value)} />
+            <Input className="min-w-0 flex-1 rounded-none border-0 border-b border-input bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-primary dark:bg-transparent" value={displayName} maxLength={nameLimit} placeholder={nameLabel} aria-label="账号名称" disabled={nameBusy} onChange={(event) => setDisplayName(event.target.value)} />
             {currentName ? <Button className="h-10 w-10 px-0" variant="ghost" type="button" disabled={nameBusy} title="取消修改" aria-label="取消修改" onClick={() => { setDisplayName(currentName); setNameEditing(false); }}><X size={16} /></Button> : null}
-            <Button className="h-10 w-10 px-0" type="submit" disabled={nameBusy || !name || !nameChanged || [...name].length > 25} title={nameAction} aria-label={nameAction}>
+            <Button className="h-10 w-10 px-0" type="submit" disabled={nameBusy || !name || !nameChanged || [...name].length > nameLimit} title={nameAction} aria-label={nameAction}>
               {nameBusy ? <Loader2 className="size-4 animate-spin" /> : <Check size={16} />}
             </Button>
           </form>

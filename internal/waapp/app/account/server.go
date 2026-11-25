@@ -68,6 +68,7 @@ type Application struct {
 	*accountSettingsHandler
 	*accountReviewHandler
 	*groupHandler
+	*linkedDeviceHandler
 }
 
 func newApplication(core *serverCore) *Application {
@@ -82,6 +83,7 @@ func newApplication(core *serverCore) *Application {
 		accountSettingsHandler: &accountSettingsHandler{serverCore: core},
 		accountReviewHandler:   &accountReviewHandler{serverCore: core},
 		groupHandler:           &groupHandler{serverCore: core},
+		linkedDeviceHandler:    &linkedDeviceHandler{serverCore: core},
 	}
 	return server
 }

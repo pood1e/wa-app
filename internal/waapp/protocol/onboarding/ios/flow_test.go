@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdh"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,10 +31,11 @@ import (
 const smsMethod = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_SMS
 
 func syntheticProfile() *protocolv1.IOSRegistrationProfile {
+	hash := md5.Sum([]byte("2." + defaultAppVersion))
 	return &protocolv1.IOSRegistrationProfile{
-		AppVersion: "26.40.77", UserAgent: "WhatsApp/2.26.40.77 iOS/18.4.1",
-		Language: "en", Locale: "GB", BuildTokenSecret: strings.Repeat("s", 40), BuildHash: strings.Repeat("0", 32),
-		Client: &protocolv1.ClientMetadata{Platform: protocolv1.ClientPlatform_CLIENT_PLATFORM_IOS, AppVersion: "2.26.40.77",
+		AppVersion: defaultAppVersion, UserAgent: "WhatsApp/2." + defaultAppVersion + " iOS/18.4.1",
+		Language: "en", Locale: "GB", BuildTokenSecret: strings.Repeat("s", 40), BuildHash: hex.EncodeToString(hash[:]),
+		Client: &protocolv1.ClientMetadata{Platform: protocolv1.ClientPlatform_CLIENT_PLATFORM_IOS, AppVersion: "2." + defaultAppVersion,
 			OsVersion: "18.4.1", Device: "iPhone12,3", Manufacturer: "Apple", NoiseRootPublicKey: bytes.Repeat([]byte{1}, 32)},
 	}
 }

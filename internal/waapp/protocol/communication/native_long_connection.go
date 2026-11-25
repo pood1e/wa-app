@@ -130,6 +130,11 @@ func (e *Connection) ReceiveMessageBatch(ctx context.Context, input wacore.Engin
 			e.CloseLocked()
 			return wacore.EngineMessageBatchResult{Err: ChatdReceiveError(err)}
 		}
+		if update.AccountLogout == nil {
+			if err := e.flushLinkedDeviceBootstrap(ctx, &state); err != nil {
+				return wacore.EngineMessageBatchResult{Err: err}
+			}
+		}
 	}
 	return wacore.EngineMessageBatchResult{Messages: messages, Contacts: wamodel.ContactsFromContactHints(input.WAAccountID, nil, update.ContactHints, e.clock.Now()), OTPMessages: otps, AccountLogout: AccountLogoutFromUpdate(update.AccountLogout), Receipts: update.Receipts, Presences: update.Presences}
 }

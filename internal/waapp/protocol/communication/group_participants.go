@@ -16,7 +16,7 @@ import (
 	"github.com/pood1e/wa-app/internal/waapp/wacore"
 )
 
-func (s *groupSession) participantNodes(refs []string, action string) ([]wire.ChatdNode, error) {
+func (s *connectionState) participantNodes(refs []string, action string) ([]wire.ChatdNode, error) {
 	nodes := make([]wire.ChatdNode, 0, len(refs))
 	seen := make(map[string]bool, len(refs))
 	for _, ref := range shared.UniqueNonEmptyStrings(refs...) {
@@ -73,7 +73,7 @@ func participantActionTag(action waappv1.GroupParticipantAction) (string, error)
 }
 
 func (c *Connection) UpdateGroupParticipants(ctx context.Context, request *waappv1.UpdateGroupParticipantsRequest) ([]*waappv1.GroupParticipantResult, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) ([]*waappv1.GroupParticipantResult, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) ([]*waappv1.GroupParticipantResult, error) {
 		target, err := normalizeGroupRef(request.GetGroupRef())
 		if err != nil {
 			return nil, err
@@ -158,7 +158,7 @@ func groupParticipantErrorCode(node wire.ChatdNode) string {
 }
 
 func (c *Connection) ListGroupJoinRequests(ctx context.Context, ref string) ([]*waappv1.GroupJoinRequest, error) {
-	return groupOperation(ctx, c, func(ctx context.Context, s *groupSession) ([]*waappv1.GroupJoinRequest, error) {
+	return withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) ([]*waappv1.GroupJoinRequest, error) {
 		target, err := normalizeGroupRef(ref)
 		if err != nil {
 			return nil, err

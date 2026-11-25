@@ -3,6 +3,7 @@ syntax = "proto3";
 package byte.v.forge.waapp.v1;
 
 import "byte/v/forge/waapp/protocol/v1/account.proto";
+import "byte/v/forge/waapp/model/v1/account_type.proto";
 import "byte/v/forge/waapp/v1/account_proxy.proto";
 import "byte/v/forge/waapp/v1/common.proto";
 import "byte/v/forge/waapp/v1/profile.proto";
@@ -49,6 +50,7 @@ message BeginAccountAddRequest {
   AccountAddSource source = 4;
   // Omitted: reuse this number's saved proxy, otherwise use the global default.
   AccountProxy proxy = 5;
+  byte.v.forge.waapp.model.v1.BusinessRegistration business = 6;
 }
 
 message ResolveAccountAddProxyRequest {
@@ -84,6 +86,9 @@ message AccountAddFlow {
   AccountAddSource source = 10;
   byte.v.forge.waapp.protocol.v1.ClientPlatform platform = 11;
   AccountAddPasswordChallenge password_challenge = 12;
+  byte.v.forge.waapp.model.v1.BusinessRegistration business = 13;
+  // A server-required continuation takes precedence over the initial source.
+  VerificationDeliveryMethod required_verification_method = 14;
 }
 
 message AccountAddRequest {

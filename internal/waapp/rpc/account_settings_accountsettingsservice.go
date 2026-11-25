@@ -39,3 +39,7 @@ func (s *waAccountSettingsServiceServer) SetAccountProfilePicture(ctx context.Co
 func (s *waAccountSettingsServiceServer) RemoveAccountProfilePicture(ctx context.Context, req *waappv1.RemoveAccountProfilePictureRequest) (*waappv1.RemoveAccountProfilePictureResponse, error) {
 	return s.application.RemoveAccountProfilePicture(ctx, req)
 }
+
+func (s *waAccountSettingsServiceServer) SetAccountBusinessName(ctx context.Context, req *waappv1.SetAccountBusinessNameRequest) (*waappv1.SetAccountBusinessNameResponse, error) {
+	return s.application.SetAccountBusinessName(ctx, req)
+}

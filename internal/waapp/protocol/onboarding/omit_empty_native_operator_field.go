@@ -26,7 +26,7 @@ func SanitizeResponse(data map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range data {
 		lower := strings.ToLower(key)
-		if strings.Contains(lower, "token") || strings.Contains(lower, "key") || strings.Contains(lower, "auth") || strings.Contains(lower, "code") || strings.Contains(lower, "sig") || strings.Contains(lower, "routing") {
+		if strings.Contains(lower, "token") || strings.Contains(lower, "key") || strings.Contains(lower, "auth") || strings.Contains(lower, "code") || strings.Contains(lower, "sig") || strings.Contains(lower, "routing") || strings.Contains(lower, "cert") {
 			out[key] = "<redacted>"
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	"github.com/pood1e/wa-app/internal/waapp/protocol/onboarding"
@@ -31,6 +32,9 @@ func TestPQCredentialsAndConnectionSurviveRecovery(t *testing.T) {
 	}
 	material.Recovery.ChatConnection = &protocolv1.ChatConnectionState{ServerStaticPublic: "synthetic-server-key", ServerStaticPqPublic: bytes.Repeat([]byte{7}, 800)}
 	material.Credentials.Canonical = &protocolv1.CanonicalCredentials{UserId: "9001", AccessToken: "synthetic-canonical-token", CredentialPassword: "synthetic-credential-password", ExpiresAt: 1800000000}
+	material.Recovery.Client.AccountType = modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS
+	material.Recovery.BusinessIdentity = &protocolv1.BusinessIdentity{Certificate: []byte("synthetic-business-certificate"), CertificateId: "synthetic-certificate-id"}
+	material.Recovery.LinkedDevices = &protocolv1.LinkedDeviceState{SignedKeyIndexList: []byte("synthetic-index-list"), Devices: []*protocolv1.LinkedDeviceRecord{{DeviceRef: "12025550123:2@s.whatsapp.net", CompanionProps: []byte("synthetic-companion-props")}}}
 	material.Recovery.AccountReview = &protocolv1.AccountReviewState{Token: "synthetic-review-token", Review: &protocolv1.AccountReview{Status: protocolv1.AccountReviewStatus_ACCOUNT_REVIEW_STATUS_IN_REVIEW, CheckedAt: timestamppb.Now()}}
 	restored, err := state.Restore(material.GetCredentials(), material.GetRecovery())
 	if err != nil {
@@ -48,6 +52,10 @@ func TestPQCredentialsAndConnectionSurviveRecovery(t *testing.T) {
 		t.Fatal("canonical recovery retained caller-owned authorization")
 	}
 	restored.AccountReview.Token = "changed-synthetic-token"
+	restored.LinkedDevices.Devices[0].CompanionProps[0] ^= 1
+	if bytes.Equal(restored.LinkedDevices.GetDevices()[0].GetCompanionProps(), recovery.GetLinkedDevices().GetDevices()[0].GetCompanionProps()) {
+		t.Fatal("linked-device recovery retained caller-owned device properties")
+	}
 	if recovery.GetAccountReview().GetToken() != "synthetic-review-token" || material.GetRecovery().GetAccountReview().GetToken() != "synthetic-review-token" {
 		t.Fatal("review recovery retained caller-owned authorization")
 	}

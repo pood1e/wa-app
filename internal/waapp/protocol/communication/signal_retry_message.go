@@ -17,6 +17,9 @@ import (
 
 func (p *messagePreparation) retryMessage(ctx context.Context, receipt wire.ChatdNode, request signalRetryRequest) (wire.ChatdNode, error) {
 	stored := findSentMessage(p.current, request.chat.String(), request.id)
+	if stored == nil {
+		stored = findOwnPeerMessage(p.current, request.sender.String(), request.id)
+	}
 	if stored == nil || time.Since(time.Unix(stored.GetTimestamp(), 0)) > sentMessageLifetime || !sentToDevice(p.current, stored, request.sender.String()) {
 		return wire.ChatdNode{}, errSignalRetryRejected
 	}
@@ -67,6 +70,10 @@ func (p *messagePreparation) retryMessage(ctx context.Context, receipt wire.Chat
 	}
 	if request.chat.Server != "g.us" {
 		node.Attrs["device_fanout"] = "false"
+	}
+	if ownPeerControl(message) {
+		node.Attrs["category"] = "peer"
+		node.Content = append([]wire.ChatdNode{{Tag: "meta", Attrs: map[string]string{"appdata": "default"}}}, wire.ChatdChildren(node)...)
 	}
 	applyMessageNodeAttributes(&node, message)
 	if stored.GetEdit() != "" {
