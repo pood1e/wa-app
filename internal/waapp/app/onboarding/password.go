@@ -35,15 +35,8 @@ func (s *Service) SubmitAccountAddPassword(ctx context.Context, req *waappv1.Sub
 		}
 		current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_WAITING_PASSWORD
 		if result.Status == waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_CODE {
-			current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_READY
 			current.snapshot.PasswordChallenge = nil
-			current.snapshot.Verification.Status = waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_REJECTED
-			current.snapshot.Verification.ExpiresAt = nil
-			current.snapshot.Verification.LastError = shared.ToProtoError(result.Err)
-			if next := s.clock.Now().Add(result.RetryAfter); next.After(current.nextCodeAt) {
-				current.nextCodeAt = next
-			}
-			current.snapshot.Verification.RetryAfter = shared.DurationToProto(current.nextCodeAt.Sub(current.snapshot.Verification.GetRequestedAt().AsTime()))
+			s.resumeVerification(current, result)
 		}
 		if result.Err == nil && result.Status != waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_PASSWORD {
 			return conflict("password verification has not completed")
@@ -61,5 +54,6 @@ func (s *Service) completeRegistration(ctx context.Context, current *flow, resul
 	current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_READY_TO_DELIVER
 	current.snapshot.TransferChallenge = nil
 	current.snapshot.PasswordChallenge = nil
+	current.snapshot.RequiredVerificationMethod = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 	return s.deliver(ctx, current)
 }

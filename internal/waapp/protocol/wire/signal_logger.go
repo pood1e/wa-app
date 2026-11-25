@@ -1,4 +1,4 @@
-package communication
+package wire
 
 import (
 	"log"
@@ -18,7 +18,8 @@ func (signalLogger) Warning(string, string) {}
 func (signalLogger) Configure(string)       {}
 func (signalLogger) Error(caller, _ string) { log.Printf("Signal operation failed at %s", caller) }
 
-func ensureSignalLogger() {
+// EnsureSignalLogger installs a key-safe diagnostic sink for libsignal.
+func EnsureSignalLogger() {
 	signalLoggerOnce.Do(func() {
 		var adapter logger.Loggable = signalLogger{}
 		logger.Setup(&adapter)

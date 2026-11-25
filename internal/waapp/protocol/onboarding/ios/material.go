@@ -1,6 +1,7 @@
 package ios
 
 import (
+	"bytes"
 	"crypto/ecdh"
 	"errors"
 
@@ -48,12 +49,17 @@ func (f *Flow) Material(loginID, accountID string) (*waappv1.AcceptedAccountMate
 	}
 	phone := proto.Clone(f.phone).(*waappv1.PhoneTarget)
 	phone.E164Number = "+" + loginID
-	return &waappv1.AcceptedAccountMaterial{
+	material := &waappv1.AcceptedAccountMaterial{
 		Phone: phone, ServiceLoginId: loginID, ServiceAccountId: accountID,
 		Credentials: &protocolv1.AccountCredentials{ChatStatic: chat, Identity: identity, RegistrationId: int32(f.keys.GetRegistrationId()),
 			SignedPreKey: &protocolv1.SignalPreKey{Id: int32(f.keys.GetSignedPreKeyId()), KeyPair: signed}},
 		Recovery: &protocolv1.AccountRecoveryState{Client: proto.Clone(f.client).(*protocolv1.ClientMetadata), RegistrationJid: loginID + "@s.whatsapp.net"},
-	}, nil
+	}
+	if len(f.params.certificate) != 0 {
+		material.Recovery.PushName = f.params.businessName
+		material.Recovery.BusinessIdentity = &protocolv1.BusinessIdentity{Certificate: bytes.Clone(f.params.certificate)}
+	}
+	return material, nil
 }
 
 func registrationPair(private []byte) (*protocolv1.CurveKeyPair, error) {

@@ -14,17 +14,22 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 )
 
-//go:embed android-2.26.40.76.pb
+//go:embed android-2.26.46.71.pb
 var androidBuildData string
 
 // DefaultAndroidBuild returns an independent copy of the bundled APK material.
 func DefaultAndroidBuild() (*protocolv1.AndroidBuildMaterial, error) {
+	return decodeAndroidBuild(androidBuildData)
+}
+
+func decodeAndroidBuild(data string) (*protocolv1.AndroidBuildMaterial, error) {
 	build := new(protocolv1.AndroidBuildMaterial)
-	if err := proto.Unmarshal([]byte(androidBuildData), build); err != nil {
+	if err := proto.Unmarshal([]byte(data), build); err != nil {
 		return nil, errors.New("decode bundled Android registration build")
 	}
 	if err := validateAndroidBuild(build); err != nil {
@@ -34,7 +39,15 @@ func DefaultAndroidBuild() (*protocolv1.AndroidBuildMaterial, error) {
 }
 
 func validateAndroidBuild(build *protocolv1.AndroidBuildMaterial) error {
-	if build.GetAppVersion() != wire.DefaultWAAppVersion || build.GetVersionCode() != wire.DefaultWAAppVersionCode {
+	version, code := wire.DefaultWAAppVersion, uint32(wire.DefaultWAAppVersionCode)
+	switch build.GetAccountType() {
+	case modelv1.WAAccountType_WA_ACCOUNT_TYPE_PERSONAL:
+	case modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS:
+		version, code = wire.DefaultWABusinessAppVersion, wire.DefaultWABusinessAppVersionCode
+	default:
+		return errors.New("unsupported Android account type")
+	}
+	if build.GetAppVersion() != version || build.GetVersionCode() != code {
 		return errors.New("unsupported Android registration build")
 	}
 	if len(build.GetTokenHmacKey()) != 64 || len(build.GetClassesDexMd5()) != md5.Size {

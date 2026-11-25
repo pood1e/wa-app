@@ -3,6 +3,7 @@ syntax = "proto3";
 package byte.v.forge.waapp.protocol.v1;
 
 import "byte/v/forge/waapp/protocol/v1/account.proto";
+import "byte/v/forge/waapp/model/v1/account_type.proto";
 import "byte/v/forge/waapp/protocol/v1/handshake.proto";
 
 option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1;protocolv1";
@@ -19,6 +20,7 @@ message AndroidBuildMaterial {
   bytes noise_root_public_key = 8;
   AndroidApplicationIntegrity application_integrity = 9;
   reserved 10, 11;
+  byte.v.forge.waapp.model.v1.WAAccountType account_type = 12;
 }
 
 // Host-owned logical client parameters, independent of the signing device.
@@ -29,6 +31,7 @@ message AndroidClientParameters {
   bytes requested_permissions_sha256 = 4;
   bytes native_library_names_sha256 = 5;
   bytes data_so_names_sha256 = 6;
+  byte.v.forge.waapp.model.v1.BusinessRegistration business = 7;
 }
 
 message AndroidApplicationIntegrity {
@@ -61,6 +64,7 @@ message IOSRegistrationProfile {
   string build_hash = 6;
   ClientMetadata client = 7;
   string recaptcha_site_key = 8;
+  byte.v.forge.waapp.model.v1.BusinessRegistration business = 9;
 }
 
 // Private key material owned by an in-memory registration flow.

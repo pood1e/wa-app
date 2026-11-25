@@ -14,8 +14,6 @@ import (
 	pwire "github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 )
 
-const NativeGPIAPackageName = "com.whatsapp"
-
 type NativeGPIAMaterial struct {
 	Primary       string
 	CodeCompact   string
@@ -55,7 +53,7 @@ func BuildNativeGPIAMaterial(input WamsysMaterialInput) (NativeGPIAMaterial, err
 	}
 	primaryFields := []NativeGPIAJSONField{
 		{Key: "sizeInBytes", Value: strconv.FormatUint(material.GetApkSize(), 10)},
-		{Key: "packageName", Value: NativeGPIAPackageName},
+		{Key: "packageName", Value: pwire.AndroidPackageName(input.Build.GetAccountType())},
 	}
 	if token != "" {
 		primaryFields = append(primaryFields, NativeGPIAJSONField{Key: "token", Value: token})
@@ -97,7 +95,7 @@ func NativeGPIADeviceCompactFields(input WamsysMaterialInput, sourceDir string) 
 		{Key: "_dh", Value: B64Std(material.GetPrimaryDexSha256())},
 		{Key: "_iln", Value: B64Std(input.Client.GetDataSoNamesSha256())},
 		{Key: "_isb", Value: strconv.FormatUint(material.GetApkSize(), 10)},
-		{Key: "_ip", Value: NativeGPIAPackageName},
+		{Key: "_ip", Value: pwire.AndroidPackageName(input.Build.GetAccountType())},
 		{Key: "did", Value: NativeGPIADisplayID(input.State)},
 		{Key: "_p", Value: sourceDir},
 		{Key: "_ln", Value: B64Std(input.Client.GetNativeLibraryNamesSha256())},
@@ -118,7 +116,7 @@ func NativeGPIASourceDir(input WamsysMaterialInput) string {
 func NativeStableGPIASourceDir(state NativeState) string {
 	first := NativeStableInstallToken(state, "source-dir-prefix")
 	second := NativeStableInstallToken(state, "source-dir-package")
-	return "/data/app/~~" + first + "==/com.whatsapp-" + second + "==/base.apk"
+	return "/data/app/~~" + first + "==/" + pwire.AndroidPackageName(state.Client.GetAccountType()) + "-" + second + "==/base.apk"
 }
 
 func NativeStableInstallToken(state NativeState, label string) string {

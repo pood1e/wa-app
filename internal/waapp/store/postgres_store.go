@@ -107,6 +107,9 @@ func (s *PostgresStore) validate(ctx context.Context) error {
 			return fmt.Errorf("required wa-app table %s is missing; apply migrations first", table)
 		}
 	}
+	if _, err := s.db.Exec(ctx, `SELECT account_type FROM wa_accounts LIMIT 0`); err != nil {
+		return fmt.Errorf("account type storage requires the SQL upgrade in docs/architecture/business-accounts.md: %w", err)
+	}
 	return nil
 }
 
@@ -154,10 +157,10 @@ func (s *PostgresStore) SaveWAAccount(ctx context.Context, account *waappv1.WAAc
 	if updatedAt.IsZero() {
 		updatedAt = createdAt
 	}
-	_, err := s.db.Exec(ctx, `INSERT INTO wa_accounts (wa_account_id, display_name, e164_number, country_calling_code, national_number, country_iso2, status, two_factor_auth_configured, two_factor_email_configured, two_factor_email_address, two_factor_email_verified, two_factor_email_confirmed, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-ON CONFLICT (e164_number) DO UPDATE SET display_name=COALESCE(NULLIF(EXCLUDED.display_name,''), wa_accounts.display_name), country_calling_code=EXCLUDED.country_calling_code, national_number=EXCLUDED.national_number, country_iso2=EXCLUDED.country_iso2, status=EXCLUDED.status, two_factor_auth_configured=COALESCE(EXCLUDED.two_factor_auth_configured, wa_accounts.two_factor_auth_configured), two_factor_email_configured=COALESCE(EXCLUDED.two_factor_email_configured, wa_accounts.two_factor_email_configured), two_factor_email_address=COALESCE(EXCLUDED.two_factor_email_address, wa_accounts.two_factor_email_address), two_factor_email_verified=COALESCE(EXCLUDED.two_factor_email_verified, wa_accounts.two_factor_email_verified), two_factor_email_confirmed=COALESCE(EXCLUDED.two_factor_email_confirmed, wa_accounts.two_factor_email_confirmed), updated_at=EXCLUDED.updated_at`,
-		wamodel.WAAccountID(account), account.GetDisplayName(), account.GetPhone().GetE164Number(), account.GetPhone().GetCountryCallingCode(), account.GetPhone().GetNationalNumber(), account.GetPhone().GetCountryIso2(), wamodel.WAAccountStatusStorageValue(account), nullableTwoFactorConfigured(account.GetTwoFactorAuth()), nullableTwoFactorEmailConfigured(account.GetTwoFactorAuth()), nullableTwoFactorEmailAddress(account.GetTwoFactorAuth()), nullableTwoFactorEmailVerified(account.GetTwoFactorAuth()), nullableTwoFactorEmailConfirmed(account.GetTwoFactorAuth()), createdAt, updatedAt)
+	_, err := s.db.Exec(ctx, `INSERT INTO wa_accounts (wa_account_id, display_name, e164_number, country_calling_code, national_number, country_iso2, status, two_factor_auth_configured, two_factor_email_configured, two_factor_email_address, two_factor_email_verified, two_factor_email_confirmed, created_at, updated_at, account_type)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+ON CONFLICT (e164_number) DO UPDATE SET display_name=COALESCE(NULLIF(EXCLUDED.display_name,''), wa_accounts.display_name), country_calling_code=EXCLUDED.country_calling_code, national_number=EXCLUDED.national_number, country_iso2=EXCLUDED.country_iso2, status=EXCLUDED.status, two_factor_auth_configured=COALESCE(EXCLUDED.two_factor_auth_configured, wa_accounts.two_factor_auth_configured), two_factor_email_configured=COALESCE(EXCLUDED.two_factor_email_configured, wa_accounts.two_factor_email_configured), two_factor_email_address=COALESCE(EXCLUDED.two_factor_email_address, wa_accounts.two_factor_email_address), two_factor_email_verified=COALESCE(EXCLUDED.two_factor_email_verified, wa_accounts.two_factor_email_verified), two_factor_email_confirmed=COALESCE(EXCLUDED.two_factor_email_confirmed, wa_accounts.two_factor_email_confirmed), updated_at=EXCLUDED.updated_at, account_type=EXCLUDED.account_type`,
+		wamodel.WAAccountID(account), account.GetDisplayName(), account.GetPhone().GetE164Number(), account.GetPhone().GetCountryCallingCode(), account.GetPhone().GetNationalNumber(), account.GetPhone().GetCountryIso2(), wamodel.WAAccountStatusStorageValue(account), nullableTwoFactorConfigured(account.GetTwoFactorAuth()), nullableTwoFactorEmailConfigured(account.GetTwoFactorAuth()), nullableTwoFactorEmailAddress(account.GetTwoFactorAuth()), nullableTwoFactorEmailVerified(account.GetTwoFactorAuth()), nullableTwoFactorEmailConfirmed(account.GetTwoFactorAuth()), createdAt, updatedAt, account.GetAccountType().String())
 	return err
 }
 
@@ -183,7 +186,7 @@ func (s *PostgresStore) ListWAAccounts(ctx context.Context, cursorValue string, 
 	accounts := []*waappv1.WAAccount{}
 	for rows.Next() {
 		var r waAccountRow
-		if err := rows.Scan(&r.id, &r.displayName, &r.e164, &r.cc, &r.national, &r.iso2, &r.status, &r.twoFactorConfigured, &r.twoFactorEmailConfigured, &r.twoFactorEmailAddress, &r.twoFactorEmailVerified, &r.twoFactorEmailConfirmed, &r.createdAt, &r.updatedAt); err != nil {
+		if err := rows.Scan(&r.id, &r.displayName, &r.e164, &r.cc, &r.national, &r.iso2, &r.status, &r.twoFactorConfigured, &r.twoFactorEmailConfigured, &r.twoFactorEmailAddress, &r.twoFactorEmailVerified, &r.twoFactorEmailConfirmed, &r.createdAt, &r.updatedAt, &r.accountType); err != nil {
 			return nil, "", err
 		}
 		accounts = append(accounts, r.toProto())
@@ -198,7 +201,7 @@ func (s *PostgresStore) ListWAAccounts(ctx context.Context, cursorValue string, 
 }
 
 func (s *PostgresStore) queryWAAccountPage(ctx context.Context, cursor shared.KeysetCursor, limit int) (pgx.Rows, error) {
-	const base = `SELECT wa_account_id,display_name,e164_number,country_calling_code,national_number,country_iso2,status,two_factor_auth_configured,two_factor_email_configured,two_factor_email_address,two_factor_email_verified,two_factor_email_confirmed,created_at,updated_at FROM wa_accounts`
+	const base = `SELECT wa_account_id,display_name,e164_number,country_calling_code,national_number,country_iso2,status,two_factor_auth_configured,two_factor_email_configured,two_factor_email_address,two_factor_email_verified,two_factor_email_confirmed,created_at,updated_at,account_type FROM wa_accounts`
 	if !shared.HasKeysetCursor(cursor) {
 		return s.db.Query(ctx, base+` ORDER BY updated_at DESC, wa_account_id DESC LIMIT $1`, limit)
 	}
@@ -206,9 +209,9 @@ func (s *PostgresStore) queryWAAccountPage(ctx context.Context, cursor shared.Ke
 }
 
 func (s *PostgresStore) getWAAccount(ctx context.Context, where string, args ...any) (*waappv1.WAAccount, error) {
-	row := s.db.QueryRow(ctx, `SELECT wa_account_id,display_name,e164_number,country_calling_code,national_number,country_iso2,status,two_factor_auth_configured,two_factor_email_configured,two_factor_email_address,two_factor_email_verified,two_factor_email_confirmed,created_at,updated_at FROM wa_accounts WHERE `+where, args...)
+	row := s.db.QueryRow(ctx, `SELECT wa_account_id,display_name,e164_number,country_calling_code,national_number,country_iso2,status,two_factor_auth_configured,two_factor_email_configured,two_factor_email_address,two_factor_email_verified,two_factor_email_confirmed,created_at,updated_at,account_type FROM wa_accounts WHERE `+where, args...)
 	var r waAccountRow
-	if err := row.Scan(&r.id, &r.displayName, &r.e164, &r.cc, &r.national, &r.iso2, &r.status, &r.twoFactorConfigured, &r.twoFactorEmailConfigured, &r.twoFactorEmailAddress, &r.twoFactorEmailVerified, &r.twoFactorEmailConfirmed, &r.createdAt, &r.updatedAt); err != nil {
+	if err := row.Scan(&r.id, &r.displayName, &r.e164, &r.cc, &r.national, &r.iso2, &r.status, &r.twoFactorConfigured, &r.twoFactorEmailConfigured, &r.twoFactorEmailAddress, &r.twoFactorEmailVerified, &r.twoFactorEmailConfirmed, &r.createdAt, &r.updatedAt, &r.accountType); err != nil {
 		return nil, notFound(err, waappv1.WaErrorCode_WA_ERROR_CODE_WA_ACCOUNT_NOT_FOUND, "WA account not found")
 	}
 	return r.toProto(), nil

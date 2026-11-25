@@ -41,6 +41,23 @@ func findSentMessage(current *state.NativeState, chat, id string) *protocolv1.Se
 	return nil
 }
 
+func findOwnPeerMessage(current *state.NativeState, sender, id string) *protocolv1.SentMessage {
+	device, err := ownLinkedDevice(current, sender)
+	if err != nil {
+		return nil
+	}
+	for _, record := range current.SentMessages {
+		if record.GetProviderMessageId() != id {
+			continue
+		}
+		target, err := ownLinkedDevice(current, record.GetContactRef())
+		if err == nil && target.Device == device.Device {
+			return record
+		}
+	}
+	return nil
+}
+
 func rememberSentMessage(current *state.NativeState, body *waE2E.Message, node wire.ChatdNode, at time.Time) (*protocolv1.SentMessage, error) {
 	if body == nil {
 		return nil, errors.New("message body is required")
@@ -64,6 +81,8 @@ func rememberSentMessage(current *state.NativeState, body *waE2E.Message, node w
 				devices = append(devices, child.Attrs["jid"])
 			}
 		}
+	} else if node.Attrs["category"] == "peer" {
+		devices = append(devices, chat)
 	}
 	record := &protocolv1.SentMessage{ProviderMessageId: id, ContactRef: chat, Message: data, RecipientDevices: devices, Timestamp: at.Unix(), Edit: node.Attrs["edit"]}
 	current.SentMessages[sentMessageKey(chat, id)] = record

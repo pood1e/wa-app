@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS wa_accounts (
   national_number TEXT NOT NULL DEFAULT '',
   country_iso2 TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
+  account_type TEXT NOT NULL DEFAULT 'WA_ACCOUNT_TYPE_PERSONAL',
   two_factor_auth_configured BOOLEAN,
   two_factor_email_configured BOOLEAN,
   two_factor_email_address TEXT,

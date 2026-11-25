@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react';
-import { Globe, Shield, UserRound } from 'lucide-react';
+import { Globe, Monitor, Shield, Store, UserRound } from 'lucide-react';
+import { WAAccountType } from '../proto/byte/v/forge/waapp/model/v1/account_type';
 import { WAAccountStatus, type WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { WaAccountProfileSettings } from './wa-account-profile-settings';
 import { WaAccountSecurityPanel } from './wa-account-security';
 import { WaAccountReview } from './wa-account-review';
 import { WaAccountProxySettings } from './wa-account-proxy';
+import { WaAccountTypeSettings } from './wa-account-type';
+import { WaLinkedDevices } from './wa-linked-devices';
 import { LongConnectionStatus } from '../proto/byte/v/forge/waapp/v1/messaging';
 import { type StatusView } from './wa-result-labels';
 import { useWaLongConnectionIndex, waAccountDisplayStatus } from './wa-long-connection-badge';
@@ -27,13 +30,19 @@ export function WaAccountDetail({ account, onDone, onError, onAccountChanged, on
   const online = connection?.status === LongConnectionStatus.LONG_CONNECTION_STATUS_CONNECTED || connection?.status === LongConnectionStatus.LONG_CONNECTION_STATUS_HEARTBEAT_WAITING;
   return (
     <section className="grid items-start gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <InfoPanel icon={<UserRound size={16} />} title="个人资料">
+      <InfoPanel icon={<UserRound size={16} />} title={account.account_type === WAAccountType.WA_ACCOUNT_TYPE_BUSINESS ? '商家资料' : '个人资料'}>
         <div className="grid gap-4">
           <fieldset disabled={readOnly}><WaAccountProfileSettings account={account} onDone={onDone} onError={onError} onAccountChanged={onAccountChanged} onAvatarChanged={onAvatarChanged} /></fieldset>
           <InfoGrid account={account} />
         </div>
       </InfoPanel>
       <div className="grid gap-5">
+        {!readOnly ? <InfoPanel icon={<Monitor size={16} />} title="关联设备">
+          <WaLinkedDevices key={account.wa_account_id} accountID={account.wa_account_id} online={online} onDone={onDone} onError={onError} />
+        </InfoPanel> : null}
+        {!readOnly ? <InfoPanel icon={<Store size={16} />} title="账号类型">
+          <WaAccountTypeSettings key={account.wa_account_id} account={account} online={online} onError={onError} />
+        </InfoPanel> : null}
         <InfoPanel icon={<Shield size={16} />} title="账号安全">
           <fieldset disabled={readOnly}><WaAccountSecurityPanel account={account} onDone={onDone} onError={onError} /></fieldset>
         </InfoPanel>
@@ -61,6 +70,7 @@ function InfoGrid({ account }: { account: WAAccount }) {
   const { byAccount } = useWaLongConnectionIndex();
   const connection = byAccount.get(account.wa_account_id);
   const rows: Array<{ label: string; value: ReactNode }> = [
+    { label: '账号类型', value: account.account_type === WAAccountType.WA_ACCOUNT_TYPE_BUSINESS ? '商业账号' : '个人账号' },
     { label: '手机号', value: account.phone?.e164_number || '-' },
     { label: '地区', value: account.phone?.country_iso2 || '-' },
     { label: '连接状态', value: <StatusBadge view={waAccountDisplayStatus(account, connection)} /> },

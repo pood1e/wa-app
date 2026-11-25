@@ -23,6 +23,7 @@ service WaAccountSettingsService {
   rpc GetAccountProfilePicture(GetAccountProfilePictureRequest) returns (GetAccountProfilePictureResponse);
   rpc SetAccountProfilePicture(SetAccountProfilePictureRequest) returns (SetAccountProfilePictureResponse);
   rpc RemoveAccountProfilePicture(RemoveAccountProfilePictureRequest) returns (RemoveAccountProfilePictureResponse);
+  rpc SetAccountBusinessName(SetAccountBusinessNameRequest) returns (SetAccountBusinessNameResponse);
 }
 
 enum AccountSettingsOperationKind {
@@ -35,6 +36,7 @@ enum AccountSettingsOperationKind {
   ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_PROFILE_PICTURE_SET = 6;
   ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_PROFILE_PICTURE_REMOVE = 7;
   ACCOUNT_SETTINGS_OPERATION_KIND_TWO_FACTOR_AUTH_STATUS_GET = 8;
+  ACCOUNT_SETTINGS_OPERATION_KIND_BUSINESS_NAME_SET = 9;
 }
 
 enum AccountSettingsOperationStatus {
@@ -180,6 +182,17 @@ message RemoveAccountProfilePictureRequest {
 }
 
 message RemoveAccountProfilePictureResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message SetAccountBusinessNameRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  string business_name = 3;
+}
+
+message SetAccountBusinessNameResponse {
   AccountSettingsOperation operation = 1;
   WaError error = 2;
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Connection) UpdateGroup(ctx context.Context, request *waappv1.UpdateGroupRequest) error {
-	_, err := groupOperation(ctx, c, func(ctx context.Context, s *groupSession) (struct{}, error) {
+	_, err := withConnectionState(ctx, c, func(ctx context.Context, s *connectionState) (struct{}, error) {
 		target, err := normalizeGroupRef(request.GetGroupRef())
 		if err != nil {
 			return struct{}{}, err

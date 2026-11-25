@@ -112,7 +112,9 @@ func (e *messagingService) SendMessageOnSession(ctx context.Context, session *Ch
 	}
 	var node pwire.ChatdNode
 	var err error
-	if strings.HasSuffix(target, "@g.us") {
+	if ownPeerControl(input.Message) {
+		node, err = preparation.peerMessage(ctx, target, providerID, input.Message)
+	} else if strings.HasSuffix(target, "@g.us") {
 		node, err = preparation.groupMessage(ctx, target, providerID, input.Message)
 	} else {
 		node, err = preparation.directMessage(ctx, target, providerID, input.Message)

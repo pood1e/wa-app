@@ -10,6 +10,7 @@ import (
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	pstate "github.com/pood1e/wa-app/internal/waapp/protocol/state"
+	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 	"github.com/pood1e/wa-app/internal/waapp/shared"
 )
 
@@ -219,6 +220,9 @@ func (e *engineCore) RegisterOrderedParamsWithWamsys(ctx context.Context, phone 
 	params.Set("type", "0", false)
 	if err := ApplyNativeE2EParams(&params, state); err != nil {
 		return nil, err
+	}
+	if certificate := state.BusinessIdentity.GetCertificate(); len(certificate) > 0 {
+		params.Set("vname", wire.B64u(certificate), false)
 	}
 	ApplyNativeRegisterRequestMapParams(&params, fields, methodName)
 

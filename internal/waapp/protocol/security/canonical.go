@@ -20,31 +20,7 @@ func (c *Client) Credentials(ctx context.Context, previous *protocolv1.Canonical
 		return previous, nil
 	}
 	timestamp := strconv.FormatInt(c.now().Unix(), 10)
-	certs, err := query[struct {
-		Certificates *struct {
-			Encryption *struct {
-				PEM string `json:"pem"`
-			} `json:"encryption_pem"`
-			Password *struct {
-				PEM string `json:"pem"`
-				ID  int    `json:"key_id"`
-			} `json:"password_pem"`
-		} `json:"xwa2_ent_get_certificates"`
-	}](ctx, c, GetCertificates, variables(struct {
-		Time    string `json:"request_time"`
-		UseCase string `json:"use_case"`
-	}{timestamp, "CANONICAL"}))
-	if err != nil {
-		return nil, err
-	}
-	if certs.Certificates == nil || certs.Certificates.Encryption == nil || certs.Certificates.Password == nil {
-		return nil, errors.New("canonical encryption certificates are missing")
-	}
-	encryption, err := parsePublicKey(certs.Certificates.Encryption.PEM)
-	if err != nil {
-		return nil, err
-	}
-	passwordKey, err := parsePublicKey(certs.Certificates.Password.PEM)
+	keys, err := c.canonicalKeys(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +42,7 @@ func (c *Client) Credentials(ctx context.Context, previous *protocolv1.Canonical
 	if err != nil {
 		return nil, err
 	}
-	sealedPassword, err := encryptPassword(credentials.GetCredentialPassword(), passwordKey, certs.Certificates.Password.ID, c.now().Unix())
+	sealedPassword, err := encryptPassword(credentials.GetCredentialPassword(), keys.password, keys.passwordID, c.now().Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +56,7 @@ func (c *Client) Credentials(ctx context.Context, previous *protocolv1.Canonical
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := sealCanonical(plain, encryption)
+	sealed, err := sealCanonical(plain, keys.encryption)
 	if err != nil {
 		return nil, err
 	}

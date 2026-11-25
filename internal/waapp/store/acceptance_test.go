@@ -34,7 +34,7 @@ func TestAcceptance(t *testing.T) {
 	for _, backend := range []string{"sqlite", "postgres"} {
 		t.Run(backend, func(t *testing.T) {
 			for name, test := range map[string]func(*testing.T, repository, func() repository){
-				"durable_retry": testDurableRetry, "ios_durable_retry": testIOSDurableRetry, "rollback": testRollback, "concurrent_retry": testConcurrentRetry, "concurrent_accounts": testConcurrentAccounts, "cancellation": testAcceptanceCancellation,
+				"durable_retry": testDurableRetry, "ios_durable_retry": testIOSDurableRetry, "business_conversion": testBusinessConversion, "ios_business_conversion": testIOSBusinessConversion, "rollback": testRollback, "concurrent_retry": testConcurrentRetry, "concurrent_accounts": testConcurrentAccounts, "cancellation": testAcceptanceCancellation,
 			} {
 				t.Run(name, func(t *testing.T) { repo, reopen := openRepository(t, backend); test(t, repo, reopen) })
 			}

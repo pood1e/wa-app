@@ -7,6 +7,16 @@ export function isTransferMethod(method?: VerificationDeliveryMethod) {
   return method === VerificationDeliveryMethod.VERIFICATION_DELIVERY_METHOD_WA_OLD || method === VerificationDeliveryMethod.VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER;
 }
 
+export function verificationMethodVisible(flow: AccountAddFlow | null, method: VerificationDeliveryMethod, transfer: boolean) {
+  const required = requiredVerificationMethod(flow);
+  return required ? method === required : isTransferMethod(method) === transfer;
+}
+
+export function requiredVerificationMethod(flow: AccountAddFlow | null) {
+  const method = flow?.required_verification_method;
+  return method === VerificationDeliveryMethod.VERIFICATION_DELIVERY_METHOD_UNSPECIFIED ? undefined : method;
+}
+
 export function canSubmitCode(flow: AccountAddFlow | null) {
   return !flow?.password_challenge && (flow?.status === AccountAddStatus.ACCOUNT_ADD_STATUS_WAITING_CODE || flow?.status === AccountAddStatus.ACCOUNT_ADD_STATUS_OUTCOME_UNKNOWN) &&
     (flow.verification?.status === VerificationRequestStatus.VERIFICATION_REQUEST_STATUS_SENT ||
@@ -23,6 +33,8 @@ export function canRecoverRegistration(flow: AccountAddFlow | null) {
 }
 
 export function channelState(flow: AccountAddFlow | null, method: VerificationDeliveryMethod, now: number) {
+  const required = requiredVerificationMethod(flow);
+  if (required && required !== method) return { available: false, remaining: 0 };
   if (method === VerificationDeliveryMethod.VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER) return { available: false, remaining: 0 };
   const latest = flow?.verification;
   const statuses = latest?.method_statuses?.length ? latest.method_statuses : flow?.probe?.method_statuses;
@@ -37,6 +49,7 @@ export function channelState(flow: AccountAddFlow | null, method: VerificationDe
 
 export function addingError(flow: AccountAddFlow | null, now: number) {
   const error = flow?.last_error;
+  if (requiredVerificationMethod(flow) && error?.code === WaErrorCode.WA_ERROR_CODE_VERIFICATION_REQUIRED) return '请继续完成下一步身份验证，账号密钥和添加流程已保留。';
   if (error?.code === WaErrorCode.WA_ERROR_CODE_RATE_LIMITED && flow?.password_challenge) return '两步验证暂时冷却，请稍后重新提交密码。';
   if (error?.code === WaErrorCode.WA_ERROR_CODE_VERIFICATION_REQUIRED) {
     const remaining = remainingSeconds(flow?.verification?.retry_after, flow?.verification?.requested_at, now);
@@ -50,7 +63,7 @@ export function addingError(flow: AccountAddFlow | null, now: number) {
 
 export function addingStatus(flow: AccountAddFlow | null) {
   switch (flow?.status) {
-    case AccountAddStatus.ACCOUNT_ADD_STATUS_READY: return '选择验证通道';
+    case AccountAddStatus.ACCOUNT_ADD_STATUS_READY: return requiredVerificationMethod(flow) ? '继续验证身份' : '选择验证通道';
     case AccountAddStatus.ACCOUNT_ADD_STATUS_WAITING_CODE: return flow.verification?.delivery_method === VerificationDeliveryMethod.VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER ? '等待旧设备确认' : '等待验证码';
     case AccountAddStatus.ACCOUNT_ADD_STATUS_WAITING_PASSWORD: return '输入两步验证密码';
     case AccountAddStatus.ACCOUNT_ADD_STATUS_READY_TO_DELIVER: return '等待完成添加';

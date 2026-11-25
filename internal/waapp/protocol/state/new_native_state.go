@@ -14,6 +14,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	pwire "github.com/pood1e/wa-app/internal/waapp/protocol/wire"
@@ -227,5 +228,9 @@ func QuoteForm(value string) string {
 }
 
 func NativeUserAgentForState(state NativeState, appVersion string) string {
-	return NativeUserAgentForProfile(state.Profile, appVersion)
+	agent := NativeUserAgentForProfile(state.Profile, appVersion)
+	if state.Client.GetAccountType() == modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		agent = strings.Replace(agent, " Android/", " SMBA/", 1)
+	}
+	return agent
 }

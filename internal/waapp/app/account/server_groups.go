@@ -140,18 +140,7 @@ func (s *groupHandler) groupTargetRunner(ctx context.Context, accountID, ref str
 }
 
 func (s *groupHandler) groupRunner(ctx context.Context, ref string) (groupOperations, error) {
-	id, err := wamodel.RequireWAAccountID(ref)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = s.GetWAAccountRecord(ctx, id); err != nil {
-		return nil, err
-	}
-	login, err := s.activeContactResolveLoginState(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	runner, err := s.longConnections.Acquire(ctx, login)
+	runner, err := s.accountConnection(ctx, ref)
 	if err != nil {
 		return nil, err
 	}

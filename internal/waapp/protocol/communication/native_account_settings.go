@@ -33,6 +33,9 @@ func (e *accountSettingsService) ApplyAccountSettings(ctx context.Context, input
 }
 
 func (e *accountSettingsService) ApplyAccountSettingsWithSender(ctx context.Context, input wacore.EngineAccountSettingsInput, state pstate.NativeState, sender AccountSettingsIQSender) wacore.EngineAccountSettingsResult {
+	if input.Kind == waappv1.AccountSettingsOperationKind_ACCOUNT_SETTINGS_OPERATION_KIND_BUSINESS_NAME_SET {
+		return e.setAccountBusinessName(ctx, input, state, sender)
+	}
 	if input.Kind == waappv1.AccountSettingsOperationKind_ACCOUNT_SETTINGS_OPERATION_KIND_TWO_FACTOR_AUTH_STATUS_GET || input.Kind == waappv1.AccountSettingsOperationKind_ACCOUNT_SETTINGS_OPERATION_KIND_TWO_FACTOR_AUTH_SETTINGS {
 		return e.applyAccountSecurity(ctx, input, &state, sender)
 	}

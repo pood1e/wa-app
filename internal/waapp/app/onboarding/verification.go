@@ -17,7 +17,7 @@ func (s *Service) RequestAccountAddCode(ctx context.Context, req *waappv1.Reques
 			return conflict("account adding flow cannot request a code in its current state")
 		}
 		method := req.GetDeliveryMethod()
-		if err := allowedMethod(current.request, method); err != nil {
+		if err := allowedMethod(current.request, method, current.snapshot.GetRequiredVerificationMethod()); err != nil {
 			return err
 		}
 		if s.clock.Now().Before(current.nextCodeAt) {
@@ -33,6 +33,11 @@ func (s *Service) RequestAccountAddCode(ctx context.Context, req *waappv1.Reques
 		record := &waappv1.VerificationCodeRequestRecord{VerificationRequestId: s.ids.NewID("wavrf_"), DeliveryMethod: method, Status: result.Status,
 			ExpectedCodeLength: result.ExpectedCodeLength, RequestedAt: timestamppb.New(requested), ExpiresAt: shared.ProtoTimestamp(result.ExpiresAt),
 			RetryAfter: shared.DurationToProto(result.RetryAfter), MethodStatuses: methodStatuses(result.MethodStatuses), LastError: shared.ToProtoError(result.Err)}
+		if current.snapshot.GetRequiredVerificationMethod() != waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED && len(record.GetMethodStatuses()) == 0 {
+			record.MethodStatuses = []*waappv1.VerificationMethodStatus{{DeliveryMethod: method,
+				Available: result.Status == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_SENT || result.Status == waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_WAITING,
+				Cooldown:  record.GetRetryAfter()}}
+		}
 		current.snapshot.Verification = record
 		current.snapshot.TransferChallenge = result.AccountTransferChallenge
 		if current.snapshot.TransferChallenge != nil {
@@ -77,6 +82,7 @@ func (s *Service) SubmitAccountAddCode(ctx context.Context, req *waappv1.SubmitA
 		current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_OUTCOME_UNKNOWN
 		result := current.protocol.SubmitCode(ctx, method, req.GetCode())
 		if result.Status == waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_PASSWORD {
+			current.snapshot.RequiredVerificationMethod = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 			current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_WAITING_PASSWORD
 			current.snapshot.PasswordChallenge = result.PasswordChallenge
 			if current.snapshot.PasswordChallenge == nil {
@@ -89,14 +95,7 @@ func (s *Service) SubmitAccountAddCode(ctx context.Context, req *waappv1.SubmitA
 				return s.recoverUncertainRegistration(ctx, current, result.Err)
 			}
 			if result.Status == waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_CODE {
-				current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_READY
-				verification.Status = waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_REJECTED
-				verification.LastError = shared.ToProtoError(result.Err)
-				verification.ExpiresAt = nil
-				if next := s.clock.Now().Add(result.RetryAfter); next.After(current.nextCodeAt) {
-					current.nextCodeAt = next
-				}
-				verification.RetryAfter = shared.DurationToProto(current.nextCodeAt.Sub(verification.GetRequestedAt().AsTime()))
+				s.resumeVerification(current, result)
 			} else if result.Status == waappv1.RegistrationStatus_REGISTRATION_STATUS_REJECTED || result.Status == waappv1.RegistrationStatus_REGISTRATION_STATUS_SUBMITTED {
 				current.snapshot.Status = waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_WAITING_CODE
 			}
@@ -123,7 +122,7 @@ func (s *Service) RefreshAccountAddTransfer(ctx context.Context, req *waappv1.Ac
 	})
 }
 
-func allowedMethod(req *waappv1.BeginAccountAddRequest, method waappv1.VerificationDeliveryMethod) error {
+func allowedMethod(req *waappv1.BeginAccountAddRequest, method, required waappv1.VerificationDeliveryMethod) error {
 	if method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER {
 		return shared.NewError(waappv1.WaErrorCode_WA_ERROR_CODE_UNSUPPORTED_OPERATION, "QR account transfer is not implemented", false)
 	}
@@ -131,6 +130,12 @@ func allowedMethod(req *waappv1.BeginAccountAddRequest, method waappv1.Verificat
 	registration := method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_SMS || method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_VOICE || method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_EMAIL_OTP || method == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_SEND_SMS
 	if !transfer && !registration {
 		return conflict("verification method is not supported")
+	}
+	if required != waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED {
+		if method != required {
+			return conflict("account adding requires another verification method")
+		}
+		return nil
 	}
 	if transfer != (req.GetSource().GetTransfer() != nil) {
 		return conflict("verification method does not match adding source")

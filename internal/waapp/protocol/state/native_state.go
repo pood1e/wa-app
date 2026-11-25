@@ -12,6 +12,8 @@ type NativeState struct {
 	Canonical            *protocolv1.CanonicalCredentials          `json:"-"`
 	Client               *protocolv1.ClientMetadata                `json:"client,omitempty"`
 	AccountReview        *protocolv1.AccountReviewState            `json:"-"`
+	BusinessIdentity     *protocolv1.BusinessIdentity              `json:"-"`
+	LinkedDevices        *protocolv1.LinkedDeviceState             `json:"-"`
 	Schema               string                                    `json:"schema"`
 	CreatedAtUnix        int64                                     `json:"created_at_unix"`
 	CC                   string                                    `json:"cc"`

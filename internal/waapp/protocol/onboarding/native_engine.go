@@ -69,6 +69,10 @@ func (e *registrationService) RequestVerificationCode(ctx context.Context, input
 }
 
 func (e *registrationService) RequestVerificationCodeWithState(ctx context.Context, input wacore.EngineRegistrationInput, state pstate.NativeState) (wacore.EngineCodeResult, pstate.NativeState) {
+	if required := e.requiredVerification; required != waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED && input.DeliveryMethod != required {
+		return wacore.EngineCodeResult{Status: waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_REJECTED,
+			Err: shared.NewError(waappv1.WaErrorCode_WA_ERROR_CODE_CONFLICT, "registration requires another verification method", false)}, state
+	}
 	if input.DeliveryMethod == waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER {
 		return wacore.EngineCodeResult{Status: waappv1.VerificationRequestStatus_VERIFICATION_REQUEST_STATUS_REJECTED, Err: unsupportedQRTransfer()}, state
 	}
@@ -192,10 +196,23 @@ func (e *registrationService) registerResult(ctx context.Context, input wacore.E
 		}
 		if ResponseReason(data) == "security_code" {
 			e.passwordRequired = true
+			e.requiredVerification = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 			if wait := FirstJSONWaitStatus(data["guess_wait"]).Seconds; wait > 0 {
 				e.passwordRetryAt = e.clock.Now().Add(time.Duration(wait) * time.Second)
 			}
 			return wacore.EngineRegisterResult{Status: waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_PASSWORD, PasswordChallenge: e.passwordChallenge()}
+		}
+		if next, retry, continuationErr := registrationContinuation(data, input.DeliveryMethod); continuationErr != nil {
+			e.verification = nil
+			e.passwordRequired = false
+			return wacore.EngineRegisterResult{Status: waappv1.RegistrationStatus_REGISTRATION_STATUS_REJECTED, Err: continuationErr}
+		} else if next != nil {
+			e.verification = nil
+			e.passwordRequired = false
+			e.requiredVerification = next.GetDeliveryMethod()
+			return wacore.EngineRegisterResult{Status: waappv1.RegistrationStatus_REGISTRATION_STATUS_PENDING_CODE,
+				NextVerification: next, RetryAfter: retry,
+				Err: shared.NewError(waappv1.WaErrorCode_WA_ERROR_CODE_VERIFICATION_REQUIRED, "additional verification is required", true)}
 		}
 		if reason := ResponseReason(data); reason == "missing" || reason == "stale" {
 			e.verification = nil
@@ -207,6 +224,7 @@ func (e *registrationService) registerResult(ctx context.Context, input wacore.E
 		return wacore.EngineRegisterResult{Status: waappv1.RegistrationStatus_REGISTRATION_STATUS_REJECTED, Err: WaProtocolError(data, "registration was rejected")}
 	}
 	e.passwordRequired = false
+	e.requiredVerification = waappv1.VerificationDeliveryMethod_VERIFICATION_DELIVERY_METHOD_UNSPECIFIED
 	login := shared.FirstNonEmpty(pstate.JsonString(data["login"]), pstate.JsonString(data["jid"]), pstate.JsonString(data["registration_jid"]), state.CC+state.Phone)
 	lid := shared.FirstNonEmpty(pstate.JsonString(data["lid"]), login)
 	if login != "" {

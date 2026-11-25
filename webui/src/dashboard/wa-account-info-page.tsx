@@ -4,6 +4,7 @@ import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { waAccountID, waAccountTitle } from './wa-api';
 import { WaAccountActions } from './wa-account-actions';
 import { WaAccountDetail } from './wa-account-detail';
+import { WaBusinessBadge } from './wa-business-badge';
 import { waChatsPath } from './wa-route-paths';
 
 type Props = {
@@ -23,7 +24,7 @@ export function WaAccountInfoPage({ account, busy, onDelete, onDone, onError, on
       <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link className="inline-flex size-9 shrink-0 items-center justify-center rounded-full transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring" to={waChatsPath(waAccountID(account))} title="返回消息" aria-label="返回消息"><ArrowLeft size={20} /></Link>
-          <div className="min-w-0"><h1 className="truncate text-base font-medium">账号详情</h1><p className="truncate text-xs text-muted-foreground">{subtitle}</p></div>
+          <div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-base font-medium">账号详情</h1><WaBusinessBadge accountType={account.account_type} /></div><p className="truncate text-xs text-muted-foreground">{subtitle}</p></div>
         </div>
         <WaAccountActions key={waAccountID(account)} account={account} busy={busy} onDelete={onDelete} onDone={onDone} onError={onError} onAccountChanged={onAccountChanged} />
       </header>

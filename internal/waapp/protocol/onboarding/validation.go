@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	modelv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/model/v1"
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
 	waappv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1"
 	"github.com/pood1e/wa-app/internal/waapp/protocol/communication"
@@ -57,6 +58,16 @@ func ValidateLogin(ctx context.Context, material *waappv1.AcceptedAccountMateria
 	}
 	if result.Status != waappv1.LoginStateCheckStatus_LOGIN_STATE_CHECK_STATUS_ACTIVE {
 		return nil, shared.NewError(waappv1.WaErrorCode_WA_ERROR_CODE_REJECTED, "temporary account login was not accepted", false)
+	}
+	if material.GetRecovery().GetClient().GetAccountType() == modelv1.WAAccountType_WA_ACCOUNT_TYPE_BUSINESS {
+		result := engine.ApplyAccountSettings(ctx, wacore.EngineAccountSettingsInput{
+			Kind:                 waappv1.AccountSettingsOperationKind_ACCOUNT_SETTINGS_OPERATION_KIND_BUSINESS_NAME_SET,
+			RegisteredIdentityID: material.GetServiceLoginId(), AppVersion: material.GetRecovery().GetClient().GetAppVersion(),
+			DisplayName: material.GetRecovery().GetPushName(),
+		})
+		if result.Err != nil {
+			return nil, result.Err
+		}
 	}
 	return repository.material, nil
 }

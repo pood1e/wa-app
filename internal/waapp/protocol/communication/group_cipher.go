@@ -11,6 +11,7 @@ import (
 	"go.mau.fi/whatsmeow/types"
 
 	"github.com/pood1e/wa-app/internal/waapp/protocol/state"
+	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 )
 
 type senderKeyStore struct {
@@ -61,7 +62,7 @@ func groupSenderKeyName(group, sender string) (*protocol.SenderKeyName, error) {
 }
 
 func newGroupCrypto(current *state.NativeState, name *protocol.SenderKeyName, commit bool) (*groups.SessionBuilder, *groups.GroupCipher) {
-	ensureSignalLogger()
+	wire.EnsureSignalLogger()
 	serializer := serialize.NewProtoBufSerializer()
 	store := senderKeyStore{current: current, commit: commit, serializer: serializer}
 	builder := groups.NewGroupSessionBuilder(store, serializer)
@@ -69,7 +70,7 @@ func newGroupCrypto(current *state.NativeState, name *protocol.SenderKeyName, co
 }
 
 func decryptGroupMessage(current *state.NativeState, group, sender string, raw []byte, commit bool) (SignalDecryptOutput, error) {
-	ensureSignalLogger()
+	wire.EnsureSignalLogger()
 	if len(raw) <= 65 {
 		return SignalDecryptOutput{}, errors.New("sender-key message is truncated")
 	}
@@ -91,7 +92,7 @@ func decryptGroupMessage(current *state.NativeState, group, sender string, raw [
 }
 
 func processGroupDistribution(ctx context.Context, current *state.NativeState, group, sender string, raw []byte) error {
-	ensureSignalLogger()
+	wire.EnsureSignalLogger()
 	if len(raw) < 2 {
 		return errors.New("sender-key distribution is truncated")
 	}

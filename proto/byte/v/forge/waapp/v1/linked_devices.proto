@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+
+service WaLinkedDeviceService {
+  rpc ListLinkedDevices(ListLinkedDevicesRequest) returns (ListLinkedDevicesResponse);
+  rpc LinkDevice(LinkDeviceRequest) returns (LinkDeviceResponse);
+  rpc UnlinkDevice(UnlinkDeviceRequest) returns (UnlinkDeviceResponse);
+}
+
+message LinkedDevice {
+  string device_ref = 1;
+  string name = 2;
+  string platform = 3;
+  google.protobuf.Timestamp linked_at = 4;
+}
+
+message ListLinkedDevicesRequest {
+  string wa_account_id = 1;
+}
+
+message ListLinkedDevicesResponse {
+  repeated LinkedDevice devices = 1;
+  WaError error = 2;
+}
+
+message LinkDeviceRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  // A short-lived pairing authorization, retained only for this request.
+  SensitiveText qr_code = 3;
+}
+
+message LinkDeviceResponse {
+  LinkedDevice device = 1;
+  WaError error = 2;
+  // Inspect the linked-device list and companion before authorizing another QR.
+  bool outcome_unknown = 3;
+}
+
+message UnlinkDeviceRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string device_ref = 3;
+}
+
+message UnlinkDeviceResponse {
+  WaError error = 1;
+}

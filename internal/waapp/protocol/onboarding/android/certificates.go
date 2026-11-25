@@ -11,6 +11,7 @@ import (
 	"time"
 
 	protocolv1 "github.com/pood1e/wa-app/gen/go/byte/v/forge/waapp/protocol/v1"
+	"github.com/pood1e/wa-app/internal/waapp/protocol/wire"
 )
 
 // Google publishes these attestation roots at https://android.googleapis.com/attestation/root.
@@ -125,7 +126,7 @@ func verifyApplication(authorization asn1.RawValue, build *protocolv1.AndroidBui
 		if rest, err := asn1.Unmarshal(encoded, &application); err != nil || len(rest) != 0 {
 			return errors.New("invalid Android attestation application ID")
 		}
-		if len(application.Packages) != 1 || string(application.Packages[0].Name) != "com.whatsapp" {
+		if len(application.Packages) != 1 || string(application.Packages[0].Name) != wire.AndroidPackageName(build.GetAccountType()) {
 			return errors.New("Android attestation application identity is invalid")
 		}
 		digest := sha256.Sum256(build.GetSigningCertificate())

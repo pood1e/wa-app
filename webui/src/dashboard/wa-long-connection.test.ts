@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WaErrorCode } from '../proto/byte/v/forge/waapp/v1/common';
 import { LongConnectionStatus, type LongConnectionState } from '../proto/byte/v/forge/waapp/v1/messaging';
 import { WAAccountStatus } from '../proto/byte/v/forge/waapp/v1/profile';
+import { WAAccountType } from '../proto/byte/v/forge/waapp/model/v1/account_type';
 import { indexConnections, waAccountDisplayStatus } from './wa-long-connection-badge';
 
 describe('account connection status', () => {
@@ -11,7 +12,7 @@ describe('account connection status', () => {
     for (const entries of [[historical, rejected], [rejected, historical]]) {
       const current = indexConnections(entries).get('fixture');
       expect(current?.login_state_id).toBe('latest');
-      expect(waAccountDisplayStatus({ wa_account_id: 'fixture', display_name: '', phone: undefined, status: WAAccountStatus.WA_ACCOUNT_STATUS_ACTIVE, audit: undefined, two_factor_auth: undefined }, current)).toMatchObject({ label: '登录已失效', tone: 'bad' });
+      expect(waAccountDisplayStatus({ wa_account_id: 'fixture', display_name: '', phone: undefined, status: WAAccountStatus.WA_ACCOUNT_STATUS_ACTIVE, audit: undefined, two_factor_auth: undefined, account_type: WAAccountType.WA_ACCOUNT_TYPE_PERSONAL }, current)).toMatchObject({ label: '登录已失效', tone: 'bad' });
     }
   });
   it('uses an active identity over stopped identities restored after a restart', () => {

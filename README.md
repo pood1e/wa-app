@@ -11,6 +11,10 @@
 
 Dashboard 提供账号代理、重新登录、账号复核、邮箱验证、联系人与群资料管理、聊天分页、未读计数和消息回执。消息支持文本、商家模板正文、引用、编辑、撤回和反应；媒体消息展示类型与说明。
 
+账号详情提供[关联设备](docs/architecture/linked-devices.md)：上传 WhatsApp Web 二维码截图或粘贴二维码内容，授权 Web、刷新设备列表并确认退出。原生连接完成 Canonical 授权、账户设置与联系人初始化。
+
+账号支持[转为 WhatsApp Business](docs/architecture/business-accounts.md)，通过 Android / iOS 商业版验证接纳回同一号码，保留联系人与聊天历史。随包构建及验证范围见[客户端协议基线](docs/architecture/client-builds.md)。已有 PostgreSQL 部署按[字段升级说明](docs/migration.md#商业账号字段升级)完成一次升级。
+
 服务依赖、数据生命周期和代码导航见[架构说明](docs/architecture/README.md)。
 
 ## 快速启动
@@ -109,6 +113,9 @@ WA_TEST_PG_DSN 与 WA_TEST_VALKEY_URL 用于真实后端集成测试，数据库
 | 入口 | 内容 |
 | --- | --- |
 | [架构说明](docs/architecture/README.md) | 服务依赖、数据生命周期和代码导航 |
+| [客户端协议基线](docs/architecture/client-builds.md) | 平台版本、注册续接和验证范围 |
+| [关联设备](docs/architecture/linked-devices.md) | Web 授权、初始化与撤销 |
+| [商业账号](docs/architecture/business-accounts.md) | 商业版转换、名称证书与恢复 |
 | [数据迁移](docs/migration.md) | 停写、备份、转换、切换与恢复 |
 | [Proto 契约](proto/byte/v/forge/waapp) | 公共 API 与私有协议状态 |
 | [iOS 注册联调](cmd/wa-ios-onboarding/README.md) | 命令行输入和流程控制 |

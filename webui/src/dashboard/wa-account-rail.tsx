@@ -22,8 +22,10 @@ import {
 } from '@/components/ui/sidebar';
 import type { LongConnectionState } from '../proto/byte/v/forge/waapp/v1/messaging';
 import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
+import { WAAccountType } from '../proto/byte/v/forge/waapp/model/v1/account_type';
 import { waAccountID } from './wa-api';
 import { WaAccountAvatar } from './wa-account-avatar';
+import { WaBusinessBadge } from './wa-business-badge';
 import { WaConnectionDot } from './wa-connection-dot';
 import { WaThemeToggle } from './wa-theme-toggle';
 import { WhatsAppIcon } from './wa-brand-icon';
@@ -99,8 +101,8 @@ function AccountItem({ account, selected, avatarVersion, connection, loading }: 
             <WaAccountAvatar account={account} version={avatarVersion} size="md" />
             <WaConnectionDot className="absolute bottom-0 right-0" connection={connection} loading={loading} />
           </span>
-          <span className={`min-w-0 flex-1 ${collapsedTextClass}`}>
-            <span className="block truncate text-sm font-medium">{label.primary}</span>
+          <span className={`min-w-0 flex-1 pr-7 ${collapsedTextClass}`}>
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium"><span className="truncate">{label.primary}</span><WaBusinessBadge accountType={account.account_type} /></span>
             {label.subtitle ? <span className="mt-1 block truncate text-xs text-muted-foreground">{label.subtitle}</span> : null}
           </span>
         </NavLink>
@@ -164,7 +166,8 @@ function waAccountRailLabel(account: WAAccount) {
   const phone = waAccountPhone(account);
   const primary = name || phone || '未录入手机号';
   const subtitle = name && phone ? phone : '';
-  return { primary, subtitle, tooltip: subtitle ? `${primary} · ${subtitle}` : primary };
+  const tooltip = subtitle ? `${primary} · ${subtitle}` : primary;
+  return { primary, subtitle, tooltip: account.account_type === WAAccountType.WA_ACCOUNT_TYPE_BUSINESS ? `${tooltip} · 商业账号` : tooltip };
 }
 
 function normalizeQuery(value: string) {

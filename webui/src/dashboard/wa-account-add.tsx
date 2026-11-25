@@ -7,13 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ClientPlatform } from '../proto/byte/v/forge/waapp/protocol/v1/account';
+import { WAAccountType, type BusinessRegistration } from '../proto/byte/v/forge/waapp/model/v1/account_type';
 import { AccountAddStatus, type AccountAddFlow, type AccountAddResponse } from '../proto/byte/v/forge/waapp/v1/account_add';
 import type { AccountProxy } from '../proto/byte/v/forge/waapp/v1/account_proxy';
+import { WaPlatformChoice } from './wa-platform-choice';
 import { WaErrorCode } from '../proto/byte/v/forge/waapp/v1/common';
 import type { WAAccount } from '../proto/byte/v/forge/waapp/v1/profile';
 import { VerificationDeliveryMethod } from '../proto/byte/v/forge/waapp/v1/registration';
 import { beginAccountAdd, cancelAccountAdd, deliverAccountAdd, getAccountAdd, requestAccountAddCode, submitAccountAddCode, submitAccountAddPassword } from './wa-account-add-api';
-import { addingError, addingStatus, canRecoverRegistration, canSubmitCode, canSubmitPassword, channelState, isTransferMethod } from './wa-account-add-state';
+import { addingError, addingStatus, canRecoverRegistration, canSubmitCode, canSubmitPassword, channelState, isTransferMethod, requiredVerificationMethod, verificationMethodVisible } from './wa-account-add-state';
 import { WhatsAppIcon } from './wa-brand-icon';
 import { WaRegistrationOtpCard } from './wa-registration-otp-card';
 import { WaAccountProxyFields } from './wa-account-proxy-fields';
@@ -41,6 +43,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
   const [transfer, setTransfer] = useState(false);
   const [platform, setPlatform] = useState(ClientPlatform.CLIENT_PLATFORM_ANDROID);
   const [proxy, setProxy] = useState<AccountProxy | undefined>();
+  const [business, setBusiness] = useState<BusinessRegistration | undefined>(account?.account_type === WAAccountType.WA_ACCOUNT_TYPE_BUSINESS ? { name: account.display_name } : undefined);
   const [now, setNow] = useState(Date.now());
   const loginNumber = account?.phone?.e164_number;
   const waiting = canSubmitCode(flow);
@@ -54,7 +57,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
   const locked = Boolean(flow && !ended && flow.status !== AccountAddStatus.ACCOUNT_ADD_STATUS_READY);
   const resolved = resolveWaPhoneTarget(phone, callingCode);
   const samePhone = Boolean(flow && resolved.target?.e164 === flow.phone?.e164_number && flow.platform === platform);
-  const noTransferChannel = transfer && samePhone && flow?.status === AccountAddStatus.ACCOUNT_ADD_STATUS_READY && methods.filter((method) => isTransferMethod(method.value)).every((method) => {
+  const noTransferChannel = transfer && samePhone && !requiredVerificationMethod(flow) && flow?.status === AccountAddStatus.ACCOUNT_ADD_STATUS_READY && methods.filter((method) => isTransferMethod(method.value)).every((method) => {
     const state = channelState(flow, method.value, now);
     return !state.available && state.remaining === 0;
   });
@@ -71,6 +74,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
       setCallingCode(response.flow.phone?.country_calling_code || '');
       setTransfer(Boolean(response.flow.source?.transfer));
       setPlatform(response.flow.platform || ClientPlatform.CLIENT_PLATFORM_ANDROID);
+      setBusiness(response.flow.business);
     }).catch((error: unknown) => { if (!controller.signal.aborted) onError(error instanceof Error ? error.message : '读取添加进度失败'); });
     return () => controller.abort();
   }, [flowID, loginNumber, onError]);
@@ -93,7 +97,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
       if (response.flow?.status === AccountAddStatus.ACCOUNT_ADD_STATUS_ACCEPTED) {
         setOtp('');
         setProxy(undefined);
-        onDone(account ? '已重新登录' : '账号已添加');
+        onDone(business ? '商业账号已就绪' : account ? '已重新登录' : '账号已添加');
         await onChanged();
       }
       if (response.error) onError(addingError(response.flow || null, Date.now()) || response.error.message || '添加操作失败');
@@ -112,7 +116,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
         const cancelled = await cancelAccountAdd(flow.flow_id || '');
         if (cancelled.error) return cancelled;
       }
-      return beginAccountAdd({ phone: resolved.target!.input, platform, source: transfer ? { transfer: {} } : { registration: {} }, proxy });
+      return beginAccountAdd({ phone: resolved.target!.input, platform, source: transfer ? { transfer: {} } : { registration: {} }, proxy, business });
     });
     if (response?.flow?.flow_id) setParams({ flow: response.flow.flow_id }, { replace: true });
   }
@@ -135,8 +139,8 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
     <Card className="gap-7 rounded-2xl py-8 ring-border">
       <CardHeader className="justify-items-center gap-3 px-6 text-center sm:px-8">
         <span className="mb-1 grid size-14 place-items-center rounded-full bg-accent"><WhatsAppIcon className="size-8" /></span>
-        <CardTitle className="text-xl font-medium">{accepted ? (account ? '已重新登录' : '账号已添加') : (account ? '重新登录 WhatsApp' : '验证你的手机号')}</CardTitle>
-        <CardDescription className="max-w-xs leading-6">{account ? '验证身份以恢复登录，账号资料、联系人和历史消息会保留。' : '使用手机号注册 WhatsApp，或从旧设备转入已有账号。'}</CardDescription>
+        <CardTitle className="text-xl font-medium">{business ? accepted ? '商业账号已就绪' : '验证 WhatsApp Business 账号' : accepted ? (account ? '已重新登录' : '账号已添加') : (account ? '重新登录 WhatsApp' : '验证你的手机号')}</CardTitle>
+        <CardDescription className="max-w-xs leading-6">{business ? `${business.name} · 验证当前号码，保留联系人和聊天记录。` : account ? '验证身份以恢复登录，账号资料、联系人和历史消息会保留。' : '使用手机号注册 WhatsApp，或从旧设备转入已有账号。'}</CardDescription>
         {flow || busy ? <Badge className="rounded-full" variant={accepted ? 'default' : 'secondary'}>{busy ? '处理中' : addingStatus(flow)}</Badge> : null}
       </CardHeader>
       <CardContent className="grid gap-5 px-6 sm:px-8">
@@ -144,10 +148,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
           <Button className={`h-10 flex-1 rounded-full ${!transfer ? 'bg-card text-foreground shadow-sm hover:bg-card' : 'text-muted-foreground'}`} variant="ghost" aria-pressed={!transfer} disabled={busy || disabled || locked} onClick={() => void changeSource(false)}>注册账号</Button>
           <Button className={`h-10 flex-1 rounded-full ${transfer ? 'bg-card text-foreground shadow-sm hover:bg-card' : 'text-muted-foreground'}`} variant="ghost" aria-pressed={transfer} disabled={busy || disabled || locked} onClick={() => void changeSource(true)}>从旧设备转入</Button>
         </div>}
-        <div role="group" aria-label="设备类型" className="flex items-center gap-2"><span className="mr-auto text-xs text-muted-foreground">设备类型</span>{[
-          { value: ClientPlatform.CLIENT_PLATFORM_ANDROID, label: 'Android' },
-          { value: ClientPlatform.CLIENT_PLATFORM_IOS, label: 'iOS' },
-        ].map((option) => <Button className="h-8 rounded-full px-4" key={option.value} size="sm" aria-pressed={platform === option.value} variant={platform === option.value ? 'secondary' : 'ghost'} disabled={busy || disabled || locked} onClick={() => setPlatform(option.value)}>{option.label}</Button>)}</div>
+        <WaPlatformChoice platform={platform} disabled={busy || disabled || locked} onChange={setPlatform} />
         <FieldGroup>
           <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-3">
             <Field><FieldLabel htmlFor="wa-calling-code">区号</FieldLabel><Input className="h-11" id="wa-calling-code" inputMode="tel" autoComplete="tel-country-code" value={callingCode} placeholder="+44" onChange={(event) => setCallingCode(event.target.value)} disabled={busy || disabled || locked || Boolean(account)} /></Field>
@@ -164,7 +165,7 @@ export function WaAccountAdd({ account, disabled, onChanged, onDone, onError }: 
           </div>
         </details>}
         {!locked && !accepted && !samePhone ? <Button className="h-11 w-full rounded-full" disabled={busy || disabled || !resolved.target || !validAccountProxy(proxy)} aria-label="检测验证通道" onClick={() => void probe()}>下一步<ArrowRight className="size-4" /></Button> : null}
-        {!locked && !accepted && samePhone && <div className="grid gap-2 sm:grid-cols-2">{methods.filter((method) => isTransferMethod(method.value) === transfer).map((method) => {
+        {!locked && !accepted && samePhone && <div className="grid gap-2 sm:grid-cols-2">{methods.filter((method) => verificationMethodVisible(flow, method.value, transfer)).map((method) => {
           const state = channelState(samePhone ? flow : null, method.value, now);
           return <Button className="h-10 rounded-full" key={method.value} variant="outline" disabled={busy || disabled || !state.available || flow?.status !== AccountAddStatus.ACCOUNT_ADD_STATUS_READY} onClick={() => void run(() => requestAccountAddCode(flow?.flow_id || '', method.value))}>{method.label}{state.remaining > 0 ? ` · ${state.remaining} 秒` : ''}</Button>;
         })}</div>}

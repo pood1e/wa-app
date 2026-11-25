@@ -25,6 +25,13 @@ func (s *Service) BeginAccountAdd(ctx context.Context, req *waappv1.BeginAccount
 	if normalized.GetPlatform() == protocolv1.ClientPlatform_CLIENT_PLATFORM_UNSPECIFIED {
 		normalized.Platform = protocolv1.ClientPlatform_CLIENT_PLATFORM_ANDROID
 	}
+	if normalized.Business != nil {
+		name, err := shared.RequireBusinessName(normalized.Business.GetName())
+		if err != nil {
+			return failure(err), nil
+		}
+		normalized.Business.Name = name
+	}
 	var err error
 	normalized.Proxy, err = wamodel.NormalizeAccountProxy(req.GetProxy())
 	if err != nil {
@@ -56,6 +63,7 @@ func (s *Service) BeginAccountAdd(ctx context.Context, req *waappv1.BeginAccount
 	stored.Proxy = nil
 	current := &flow{ctx: flowCtx, cancel: cancel, request: stored, requestDigest: digest, acceptanceID: "account-add/" + req.GetContext().GetRequestId(), operations: map[string]operation{},
 		snapshot: &waappv1.AccountAddFlow{FlowId: id, Phone: normalized.GetPhone(), Platform: normalized.GetPlatform(), Source: normalized.GetSource(), Status: waappv1.AccountAddStatus_ACCOUNT_ADD_STATUS_READY, ExpiresAt: timestamppb.New(s.clock.Now().Add(s.ttl))}}
+	current.snapshot.Business = proto.CloneOf(normalized.GetBusiness())
 	current.mu.Lock()
 	s.flows[id] = current
 	s.requests[req.GetContext().GetRequestId()] = id

@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -69,32 +70,47 @@ func TestAndroidProfileRejectsIncompleteOrMismatchedBuild(t *testing.T) {
 }
 
 func TestDefaultAndroidBuildOwnsBuildMaterial(t *testing.T) {
-	first, err := DefaultAndroidBuild()
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := proto.Clone(first)
-	second, err := DefaultAndroidBuild()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.GetApplicationIntegrity().GetApkSize() != 136363853 {
-		t.Fatal("bundled build does not match the analyzed APK")
-	}
-	for _, value := range [][]byte{
-		first.TokenHmacKey, first.SigningCertificate, first.ClassesDexMd5,
-		first.ServerPublicKey, first.NoiseRootPublicKey,
-		first.ApplicationIntegrity.ApkSha256, first.ApplicationIntegrity.ApkPrefixSha256,
-		first.ApplicationIntegrity.PrimaryDexSha256, first.ApplicationIntegrity.CertificateSha1,
+	for _, test := range []struct {
+		name    string
+		load    func() (*protocolv1.AndroidBuildMaterial, error)
+		version string
+		code    uint32
+		size    uint64
+		digest  string
+	}{
+		{"personal", DefaultAndroidBuild, "2.26.46.71", 264607149, 161462963, "65bb1ef033f06da08a731d513aadae2c1439542b05856597b9e2ffadced44724"},
+		{"business", DefaultBusinessAndroidBuild, "2.26.45.83", 264508303, 102810201, "a492b7fd05a4952805e0e196e3725bb3574f5ed2813de162cf6489564e10fbcb"},
 	} {
-		clear(value)
-	}
-	first.ApplicationIntegrity.ApkSize = 0
-	if !proto.Equal(second, want) {
-		t.Fatal("changing one profile corrupted another flow's build material")
-	}
-	third, err := DefaultAndroidBuild()
-	if err != nil || !proto.Equal(third, want) {
-		t.Fatal("changing one profile corrupted the bundled build material")
+		t.Run(test.name, func(t *testing.T) {
+			first, err := test.load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			integrity := first.GetApplicationIntegrity()
+			if first.GetAppVersion() != test.version || first.GetVersionCode() != test.code || integrity.GetApkSize() != test.size || hex.EncodeToString(integrity.GetApkSha256()) != test.digest {
+				t.Fatal("bundled build does not match the analyzed APK")
+			}
+			want := proto.Clone(first)
+			second, err := test.load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, value := range [][]byte{
+				first.TokenHmacKey, first.SigningCertificate, first.ClassesDexMd5,
+				first.ServerPublicKey, first.NoiseRootPublicKey,
+				integrity.ApkSha256, integrity.ApkPrefixSha256,
+				integrity.PrimaryDexSha256, integrity.CertificateSha1,
+			} {
+				clear(value)
+			}
+			integrity.ApkSize = 0
+			if !proto.Equal(second, want) {
+				t.Fatal("changing one profile corrupted another flow's build material")
+			}
+			third, err := test.load()
+			if err != nil || !proto.Equal(third, want) {
+				t.Fatal("changing one profile corrupted the bundled build material")
+			}
+		})
 	}
 }

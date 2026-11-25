@@ -78,9 +78,30 @@ func run(ctx context.Context) error {
 		var protocol addapp.Protocol
 		switch request.GetPlatform() {
 		case protocolv1.ClientPlatform_CLIENT_PLATFORM_ANDROID:
-			protocol, err = onboarding.NewAndroidFlow(ctx, request.GetPhone(), build, parameters, proxyURL, onboarding.AndroidDependencies{Attestation: androidSigner})
+			selectedBuild, selectedParameters := build, parameters
+			selectedSigner := androidSigner
+			if request.GetBusiness() != nil {
+				selectedBuild, err = onboarding.DefaultBusinessAndroidBuild()
+				if err != nil {
+					return nil, err
+				}
+				selectedParameters = onboarding.DefaultBusinessAndroidClient()
+				selectedParameters.Business = request.GetBusiness()
+				// Business registration selects the native error_code branch.
+				selectedSigner = nil
+			}
+			protocol, err = onboarding.NewAndroidFlow(ctx, request.GetPhone(), selectedBuild, selectedParameters, proxyURL, onboarding.AndroidDependencies{Attestation: selectedSigner})
 		case protocolv1.ClientPlatform_CLIENT_PLATFORM_IOS:
-			protocol, err = onboarding.NewIOSFlow(ctx, request.GetPhone(), iosProfile, proxyURL, iosDependencies)
+			selectedProfile, selectedDependencies := iosProfile, iosDependencies
+			if request.GetBusiness() != nil {
+				selectedProfile, err = ios.DefaultBusinessProfile()
+				if err != nil {
+					return nil, err
+				}
+				selectedProfile.Business = request.GetBusiness()
+				selectedDependencies = ios.Dependencies{}
+			}
+			protocol, err = onboarding.NewIOSFlow(ctx, request.GetPhone(), selectedProfile, proxyURL, selectedDependencies)
 		default:
 			return nil, shared.NewError(waappv1.WaErrorCode_WA_ERROR_CODE_UNSUPPORTED_OPERATION, "account platform is not supported", false)
 		}

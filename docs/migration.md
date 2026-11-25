@@ -61,3 +61,16 @@ Android 添加流程使用随协议打包的单一实测设备基线；机型池
 迁移测试覆盖已完成账号密钥、收发链与计数器保留、旧结构启动拒绝、非法材料回滚；session 测试覆盖租约丢失及删除前等待清理。
 运行态测试覆盖内存并发所有权、续租与过期、数据拷贝及关闭清理，并保留真实 Valkey 所有者隔离测试。
 正式数据转换与已有账号外网收发验收需要在停写窗口执行。
+
+## 商业账号字段升级
+
+已采用当前两服务结构的 PostgreSQL 部署，停服并备份后执行一次字段升级，再启动同一版本的两个服务及 Dashboard：
+
+```sql
+ALTER TABLE wa_accounts
+  ADD COLUMN account_type TEXT NOT NULL DEFAULT 'WA_ACCOUNT_TYPE_PERSONAL';
+```
+
+新建 PostgreSQL 数据库的初始化 schema 已包含该字段。SQLite 将账号类型保存在既有 Proto 记录中，沿用原数据库文件。
+
+关联设备通过既有凭证与恢复状态 Proto 保存 Canonical 材料、签名索引、AppState 密钥和初始化进度。升级保留主设备 Noise、Signal 身份与预密钥；重新生成的契约、前端和两服务一同发布。

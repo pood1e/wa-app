@@ -3,6 +3,7 @@ package onboarding
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"net/url"
 	"strings"
 	"testing"
@@ -28,8 +29,8 @@ func TestAndroidFlowUsesIndependentLogicalClientParameters(t *testing.T) {
 		parameters *protocolv1.AndroidClientParameters
 		userAgent  string
 	}{
-		{"default", DefaultAndroidClient(), "WhatsApp/2.26.40.76 Android/17 Device/Google-Pixel_6_Pro"},
-		{"other client", protocoltest.AndroidClient(), "WhatsApp/2.26.40.76 Android/17 Device/Synthetic-TestPhone"},
+		{"default", DefaultAndroidClient(), "WhatsApp/2.26.46.71 Android/17 Device/Google-Pixel_6_Pro"},
+		{"other client", protocoltest.AndroidClient(), "WhatsApp/2.26.46.71 Android/17 Device/Synthetic-TestPhone"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := proto.Clone(tc.parameters)
@@ -137,5 +138,22 @@ func TestDefaultAndroidClientOwnsItsRuntimeMaterial(t *testing.T) {
 	first.Options.AdbEnabled = proto.Bool(false)
 	if !proto.Equal(second, want) || !proto.Equal(DefaultAndroidClient(), want) {
 		t.Fatal("logical clients share mutable defaults")
+	}
+}
+
+func TestAndroidClientsUseCurrentApplicationPermissions(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		client *protocolv1.AndroidClientParameters
+		digest string
+	}{
+		{"personal", DefaultAndroidClient(), "a7d2aa436bd9d23bfbf98052b9e28bd5d96a2961fb3c5b2295d25292af07cb0c"},
+		{"business", DefaultBusinessAndroidClient(), "24e403dfe29d8b21ee50ff1b9a11bfa37ee3df3040f3742a01e57cef59bffb39"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if hex.EncodeToString(test.client.GetRequestedPermissionsSha256()) != test.digest {
+				t.Fatal("permissions digest differs from the current APK on Android 17")
+			}
+		})
 	}
 }

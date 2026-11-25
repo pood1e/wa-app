@@ -119,7 +119,7 @@ func TestGroupParticipantInputDeduplicatesCanonicalIdentities(t *testing.T) {
 	current := newMessageParty(t)
 	current.ContactHints = []wacore.WAContactHint{{PNJID: "12025550123@s.whatsapp.net", LIDJID: "100001@lid"}}
 	connection, _, _ := groupTestConnection(t, current)
-	session := groupSession{connection: connection, current: current}
+	session := connectionState{connection: connection, current: current}
 	nodes, err := session.participantNodes([]string{"12025550123:2@s.whatsapp.net", "100001@lid", "100001:4@lid"}, "create")
 	if err != nil || len(nodes) != 1 || nodes[0].Attrs["jid"] != "100001@lid" || nodes[0].Attrs["phone_number"] != "12025550123@s.whatsapp.net" {
 		t.Fatal("PN/LID/device aliases produced duplicate group actions", err)
